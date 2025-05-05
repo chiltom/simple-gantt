@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gantt Chart Demo</title>
+    <link rel="stylesheet" href="dist/styles.css" />
+  </head>
+  <body>
+    <div id="gantt-container" class="gantt-container"></div>
+    <script src="dist/gantt.js"></script>
+    <script>
+      const tasks = [
+        {
+          id: 1,
+          title: "Development Task A",
+          start: "2025-05-01",
+          end: "2025-05-10",
+          priority: 1,
+          description: "Build feature X",
+          owner: "Alice",
+        },
+        {
+          id: 2,
+          title: "Development Task B",
+          start: "2025-05-05",
+          end: "2025-05-15",
+          priority: 1,
+          description: "Test feature Y",
+          owner: "Bob",
+        },
+        {
+          id: 3,
+          title: "Marketing Task X",
+          start: "2025-05-03",
+          end: "2025-05-12",
+          priority: 2,
+          description: "Launch campaign",
+          owner: "Charlie",
+        },
+        {
+          id: 4,
+          title: "Marketing Task Y",
+          start: "2025-05-08",
+          end: "2025-05-20",
+          priority: 2,
+          description: "Analyze results",
+          owner: "Dana",
+        },
+      ];
+      new GanttChart("gantt-container", tasks, {
+        nameField: "title",
+        tooltipFields: [
+          "title",
+          "start",
+          "end",
+          "priority",
+          "description",
+          "owner",
+        ],
+      });
+    </script>
+  </body>
+</html>

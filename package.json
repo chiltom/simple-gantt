@@ -1,0 +1,15 @@
+{
+    "name": "gantt-chart",
+    "version": "1.0.0",
+    "description": "A lightweight, static SVG Gantt chart package",
+    "main": "dist/gantt.js",
+    "types": "dist/gantt.d.ts",
+    "scripts": {
+        "build": "tsc && cp src/styles.css dist/styles.css"
+    },
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "typescript": "^5.2.2"
+    }
+}
