@@ -2,11 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gantt Chart Demo</title>
     <link rel="stylesheet" href="dist/styles.css" />
   </head>
   <body>
-    <div id="gantt-container" class="gantt-container"></div>
+    <div style="max-width: 1200px; margin: 0 auto; padding: 20px">
+      <div id="gantt-container" class="gantt-container"></div>
+    </div>
     <script src="dist/gantt.js"></script>
     <script>
       const tasks = [
@@ -57,6 +60,7 @@
           "description",
           "owner",
         ],
+        timelineMonths: 18, // Scrollable for 18 months
       });
     </script>
   </body>

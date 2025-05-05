@@ -6,6 +6,7 @@ export declare class GanttChart<T extends Task> {
     private width;
     private height;
     private margin;
+    private scrollableWidth;
     constructor(containerId: string, tasks: T[], config: GanttConfig<T>);
     private render;
 }

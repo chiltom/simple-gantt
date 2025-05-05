@@ -72,15 +72,22 @@ interface GanttConfig<T extends Task> {
 ## Features
 
 - Static, non-editable SVG Gantt chart.
+- Horizontal scrolling for extended timelines.
+- Responsive design adapting to container size.
 - Tasks grouped by priority with a dashed separator.
 - Configurable task field for bar display (e.g., `name`, `title`).
 - Configurable tooltip fields (e.g., `start`, `end`, `description`).
-- Modern styling, customizable via CSS.
+- Modern styling with gradients, shadows, and animations.
 - No external dependencies.
+
+## Styling
+
+- Uses Roboto font (optional, falls back to sans-serif).
+- Customizable via `styles.css` (colors, fonts, etc.).
+- Gradient-filled task bars, hover animations, and smooth tooltips.
 
 ## Building from Source
 
 1. Install dependencies: `npm install`
 2. Build: `npm run build`
 3. Output is in `dist/`.
-

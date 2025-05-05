@@ -7,4 +7,5 @@ export interface Task {
 export interface GanttConfig<T extends Task> {
     nameField: keyof T;
     tooltipFields: (keyof T)[];
+    timelineMonths?: number;
 }

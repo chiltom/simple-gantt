@@ -1,46 +1,165 @@
 .gantt-container {
   margin: 20px;
-  font-family: Arial, sans-serif;
+  overflow-x: auto;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Scroll indicators */
+.gantt-container::before,
+.gantt-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.gantt-container::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(249, 250, 251, 0.8), transparent);
+}
+
+.gantt-container::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(249, 250, 251, 0.8), transparent);
+}
+
+svg {
+  display: block;
+  min-width: 100%;
 }
 
 .task {
-  stroke: #333;
-  stroke-width: 1;
-  rx: 4; /* Rounded corners */
+  stroke: none;
+  rx: 6; /* Rounded corners */
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.task:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
 }
 
 .priority-1 {
-  fill: #4a90e2; /* Blue for priority 1 */
+  fill: url(#gradient-1);
 }
 
 .priority-2 {
-  fill: #e94e77; /* Pink for priority 2 */
+  fill: url(#gradient-2);
 }
 
-text {
+/* SVG Gradients */
+svg defs {
+  display: block;
+}
+
+#gradient-1 {
+  stop-color: #3b82f6; /* Blue */
+}
+
+#gradient-2 {
+  stop-color: #ec4899; /* Pink */
+}
+
+.grid-line {
+  stroke: #e5e7eb;
+  stroke-width: 1;
+}
+
+.timeline {
+  stroke: #1f2937;
+  stroke-width: 3;
+}
+
+.date-label {
   font-size: 12px;
-  fill: #333;
+  fill: #4b5563;
+  font-weight: 500;
+}
+
+.task-name {
+  font-size: 12px;
+  fill: #ffffff;
+  font-weight: 600;
+}
+
+.task-label {
+  font-size: 12px;
+  fill: #1f2937;
+  font-weight: 500;
+}
+
+.separator {
+  stroke: #6b7280;
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+}
+
+.separator-label {
+  font-size: 12px;
+  fill: #4b5563;
+  font-weight: 600;
 }
 
 .tooltip {
-  position: absolute;
-  background: #333;
-  color: #fff;
-  padding: 8px;
-  border-radius: 4px;
+  position: fixed;
+  background: #1f2937;
+  color: #ffffff;
+  padding: 10px 12px;
+  border-radius: 6px;
   font-size: 12px;
+  line-height: 1.6;
   pointer-events: none;
   display: none;
-  line-height: 1.5;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+  opacity: 0;
+}
+
+.tooltip.visible {
+  display: block;
+  opacity: 1;
+  transform: translateY(-5px);
 }
 
 .tooltip::after {
   content: "";
   position: absolute;
   top: -5px;
-  left: 10px;
+  left: 12px;
   border-width: 0 5px 5px 5px;
   border-style: solid;
-  border-color: transparent transparent #333 transparent;
+  border-color: transparent transparent #1f2937 transparent;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .gantt-container {
+    margin: 10px;
+    padding: 5px;
+  }
+
+  .task-name,
+  .task-label,
+  .date-label,
+  .separator-label {
+    font-size: 10px;
+  }
+
+  .margin {
+    left: 100px;
+  }
 }
