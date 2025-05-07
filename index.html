@@ -3,11 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gantt Chart Demo</title>
+    <title>Enhanced Gantt Chart Demo</title>
     <link rel="stylesheet" href="dist/styles.css" />
   </head>
   <body>
     <div style="max-width: 1200px; margin: 0 auto; padding: 20px">
+      <h1>Enhanced Gantt Chart</h1>
+      <p>
+        A customizable Gantt chart for visualizing project timelines and tasks.
+      </p>
       <div id="gantt-container" class="gantt-container"></div>
     </div>
     <script src="dist/gantt.js"></script>
@@ -15,52 +19,59 @@
       const tasks = [
         {
           id: 1,
-          title: "Development Task A",
-          start: "2025-05-01",
-          end: "2025-05-10",
-          priority: 1,
-          description: "Build feature X",
+          priority: 1.1,
+          name: "Mow the lawn",
+          start: "2025-05-05",
+          end: "2025-05-06",
+          task_list: ["Start the mower", "Charge my phone"],
           owner: "Alice",
         },
         {
           id: 2,
-          title: "Development Task B",
-          start: "2025-05-05",
-          end: "2025-05-15",
-          priority: 1,
-          description: "Test feature Y",
+          priority: 1.2,
+          name: "Clean the garage",
+          start: "2025-05-07",
+          end: "2025-05-09",
+          task_list: ["Sort tools", "Sweep floor", "Organize shelves"],
           owner: "Bob",
         },
         {
           id: 3,
-          title: "Marketing Task X",
-          start: "2025-05-03",
-          end: "2025-05-12",
-          priority: 2,
-          description: "Launch campaign",
+          priority: 2.1,
+          name: "Paint the fence",
+          start: "2025-05-10",
+          end: "2025-05-15",
+          task_list: ["Buy paint", "Prepare surface", "Apply primer"],
           owner: "Charlie",
         },
         {
           id: 4,
-          title: "Marketing Task Y",
-          start: "2025-05-08",
-          end: "2025-05-20",
-          priority: 2,
-          description: "Analyze results",
+          priority: 2.2,
+          name: "Fix the roof",
+          start: "2025-05-12",
+          end: "2025-05-18",
+          task_list: [
+            "Inspect damage",
+            "Purchase materials",
+            "Schedule helpers",
+          ],
           owner: "Dana",
         },
+        {
+          id: 5,
+          priority: 3.1,
+          name: "Plant garden",
+          start: "2025-05-15",
+          end: "2025-05-20",
+          task_list: ["Buy seeds", "Prepare soil", "Install irrigation"],
+          owner: "Eve",
+        },
       ];
+
       new GanttChart("gantt-container", tasks, {
-        nameField: "title",
-        tooltipFields: [
-          "title",
-          "start",
-          "end",
-          "priority",
-          "description",
-          "owner",
-        ],
-        timelineMonths: 18, // Scrollable for 18 months
+        tooltipFields: ["name", "start", "end", "priority", "owner"],
+        showTaskList: true,
+        timelineMonths: 3,
       });
     </script>
   </body>
