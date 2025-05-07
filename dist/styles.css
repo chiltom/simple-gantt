@@ -17,6 +17,7 @@
   --gantt-priority-3: #10b981;
   --gantt-priority-4: #f59e0b;
   --gantt-priority-5: #8b5cf6;
+  --gantt-today-line: #ef4444;
 }
 
 .gantt-container {
@@ -52,8 +53,7 @@
 
 .gantt-svg-container {
   flex: 1;
-  overflow-x: auto;
-  overflow-y: auto;
+  overflow: hidden;
   max-height: 600px;
   position: relative;
 }
@@ -129,6 +129,18 @@ svg {
   stroke-width: 3;
 }
 
+.today-line {
+  stroke: var(--gantt-today-line);
+  stroke-width: 2;
+  stroke-dasharray: 5, 3;
+}
+
+.today-label {
+  font-size: 12px;
+  fill: var(--gantt-today-line);
+  font-weight: 600;
+}
+
 .date-label {
   font-size: 12px;
   fill: var(--gantt-text-light);
@@ -146,12 +158,14 @@ svg {
   fill: #ffffff;
   font-weight: 600;
   dominant-baseline: middle;
+  pointer-events: none;
 }
 
 .date-range {
   font-size: 11px;
   fill: rgba(255, 255, 255, 0.9);
   font-weight: 400;
+  pointer-events: none;
 }
 
 .priority-group-header {
@@ -175,7 +189,7 @@ svg {
     filter 0.2s ease;
 }
 
-.task:hover {
+.task-group:hover .task {
   transform: translateY(-2px);
   filter: drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.15));
 }
@@ -287,6 +301,43 @@ svg {
   margin-bottom: 4px;
 }
 
+/* Zoom and pan controls */
+.gantt-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.zoom-btn {
+  background: white;
+  border: 1px solid var(--gantt-border);
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.zoom-btn:hover {
+  background-color: #f3f4f6;
+}
+
+.zoom-reset {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .gantt-container {
@@ -310,5 +361,9 @@ svg {
   .date-label,
   .month-label {
     font-size: 11px;
+  }
+
+  .zoom-controls {
+    flex-wrap: wrap;
   }
 }

@@ -2,6 +2,7 @@ import type { Task, GanttConfig } from "./types";
 
 export class GanttChart<T extends Task> {
   private svg: SVGSVGElement;
+  private svgContent: SVGGElement;
   private tasks: T[];
   private config: GanttConfig<T>;
   private width = 1000; // Base width, adjusted dynamically
@@ -10,6 +11,14 @@ export class GanttChart<T extends Task> {
   private scrollableWidth: number;
   private tableContainer: HTMLDivElement;
   private chartContainer: HTMLDivElement;
+  private svgContainer: HTMLDivElement;
+  private zoomLevel = 1;
+  private minDate: Date;
+  private maxDate: Date;
+  private isDragging = false;
+  private dragStartX = 0;
+  private viewBox = { x: 0, y: 0, width: 0, height: 0 };
+  private tooltip: HTMLDivElement;
 
   constructor(containerId: string, tasks: T[], config: GanttConfig<T>) {
     const container = document.getElementById(containerId);
@@ -27,9 +36,39 @@ export class GanttChart<T extends Task> {
     this.chartContainer.appendChild(this.tableContainer);
 
     // Create SVG container
-    const svgContainer = document.createElement("div");
-    svgContainer.className = "gantt-svg-container";
-    this.chartContainer.appendChild(svgContainer);
+    this.svgContainer = document.createElement("div");
+    this.svgContainer.className = "gantt-svg-container";
+    this.chartContainer.appendChild(this.svgContainer);
+
+    // Create controls container
+    const controlsContainer = document.createElement("div");
+    controlsContainer.className = "gantt-controls";
+    container.appendChild(controlsContainer);
+
+    // Add zoom controls
+    const zoomControls = document.createElement("div");
+    zoomControls.className = "zoom-controls";
+    zoomControls.innerHTML = `
+      <button class="zoom-btn zoom-in" title="Zoom In">+</button>
+      <button class="zoom-btn zoom-out" title="Zoom Out">-</button>
+      <button class="zoom-btn zoom-reset" title="Reset Zoom">Reset</button>
+    `;
+    controlsContainer.appendChild(zoomControls);
+
+    // Add event listeners for zoom buttons
+    const zoomInBtn = zoomControls.querySelector(
+      ".zoom-in",
+    ) as HTMLButtonElement;
+    const zoomOutBtn = zoomControls.querySelector(
+      ".zoom-out",
+    ) as HTMLButtonElement;
+    const zoomResetBtn = zoomControls.querySelector(
+      ".zoom-reset",
+    ) as HTMLButtonElement;
+
+    zoomInBtn.addEventListener("click", () => this.zoom(0.2));
+    zoomOutBtn.addEventListener("click", () => this.zoom(-0.2));
+    zoomResetBtn.addEventListener("click", () => this.resetZoom());
 
     // Compute dynamic dimensions
     const containerRect = container.getBoundingClientRect();
@@ -38,13 +77,17 @@ export class GanttChart<T extends Task> {
     this.scrollableWidth = (this.width * (config.timelineMonths || 12)) / 3; // Approx 3 months per width
 
     this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    this.svg.setAttribute("width", this.scrollableWidth.toString());
+    this.svg.setAttribute("width", "100%");
     this.svg.setAttribute("height", this.height.toString());
-    this.svg.setAttribute(
-      "viewBox",
-      `0 0 ${this.scrollableWidth} ${this.height}`,
+
+    // Create a group for all content that will be transformed
+    this.svgContent = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "g",
     );
-    svgContainer.appendChild(this.svg);
+    this.svg.appendChild(this.svgContent);
+
+    this.svgContainer.appendChild(this.svg);
 
     // Add SVG definitions for gradients
     this.addSvgDefs();
@@ -63,7 +106,203 @@ export class GanttChart<T extends Task> {
       ...config,
     };
 
+    // Create tooltip
+    this.tooltip = document.createElement("div");
+    this.tooltip.className = "tooltip";
+    document.body.appendChild(this.tooltip);
+
+    // Calculate date range
+    const timestamps = this.tasks.flatMap((t: T) => [
+      new Date(t.start).getTime(),
+      new Date(t.end).getTime(),
+    ]);
+    this.minDate = new Date(Math.min(...timestamps));
+    this.minDate.setDate(this.minDate.getDate() - 15); // Buffer: 15 days before
+    this.maxDate = new Date(Math.max(...timestamps));
+    this.maxDate.setDate(this.maxDate.getDate() + 15); // Buffer: 15 days after
+
+    // Ensure we have at least the configured number of months
+    const currentRange =
+      (this.maxDate.getTime() - this.minDate.getTime()) /
+      (1000 * 60 * 60 * 24 * 30);
+    if (currentRange < (this.config.timelineMonths || 12)) {
+      this.maxDate.setMonth(
+        this.minDate.getMonth() + (this.config.timelineMonths || 12),
+      );
+    }
+
+    // Set initial viewBox
+    this.viewBox = {
+      x: 0,
+      y: 0,
+      width: this.scrollableWidth,
+      height: this.height,
+    };
+    this.updateViewBox();
+
+    // Add pan event listeners
+    this.setupPanEvents();
+
+    // Add wheel zoom event listener
+    this.svgContainer.addEventListener(
+      "wheel",
+      (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? -0.1 : 0.1;
+
+          // Get mouse position relative to SVG
+          const svgRect = this.svg.getBoundingClientRect();
+          const mouseX = e.clientX - svgRect.left;
+          const mouseY = e.clientY - svgRect.top;
+
+          // Convert to SVG coordinates
+          const svgPoint = this.svg.createSVGPoint();
+          svgPoint.x = mouseX;
+          svgPoint.y = mouseY;
+
+          // Zoom at mouse position
+          this.zoomAtPoint(delta, svgPoint);
+        }
+      },
+      { passive: false },
+    );
+
     this.render();
+  }
+
+  private setupPanEvents() {
+    let lastX = 0;
+    let lastY = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      // Only start dragging on left mouse button
+      if (e.button !== 0) return;
+
+      this.isDragging = true;
+      this.dragStartX = e.clientX;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      this.svgContainer.style.cursor = "grabbing";
+      e.preventDefault();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!this.isDragging) return;
+
+      const dx = (e.clientX - lastX) / this.zoomLevel;
+      const dy = (e.clientY - lastY) / this.zoomLevel;
+
+      this.viewBox.x -= dx;
+      this.viewBox.y -= dy;
+
+      // Constrain panning to prevent going too far
+      const maxX = this.scrollableWidth - this.viewBox.width;
+      this.viewBox.x = Math.max(0, Math.min(this.viewBox.x, maxX));
+      this.viewBox.y = Math.max(
+        0,
+        Math.min(this.viewBox.y, this.height - this.viewBox.height),
+      );
+
+      this.updateViewBox();
+
+      lastX = e.clientX;
+      lastY = e.clientY;
+      e.preventDefault();
+    };
+
+    const onMouseUp = () => {
+      this.isDragging = false;
+      this.svgContainer.style.cursor = "grab";
+    };
+
+    // Add event listeners
+    this.svgContainer.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+
+    // Set initial cursor
+    this.svgContainer.style.cursor = "grab";
+  }
+
+  private updateViewBox() {
+    this.svg.setAttribute(
+      "viewBox",
+      `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.width} ${this.viewBox.height}`,
+    );
+  }
+
+  private zoom(delta: number) {
+    // Get the center point of the current view
+    const centerX = this.viewBox.x + this.viewBox.width / 2;
+    const centerY = this.viewBox.y + this.viewBox.height / 2;
+
+    // Create an SVG point at the center
+    const centerPoint = this.svg.createSVGPoint();
+    centerPoint.x = centerX;
+    centerPoint.y = centerY;
+
+    // Zoom at the center point
+    this.zoomAtPoint(delta, centerPoint);
+  }
+
+  private zoomAtPoint(delta: number, point: SVGPoint) {
+    // Calculate new zoom level
+    const newZoomLevel = Math.max(0.5, Math.min(5, this.zoomLevel + delta));
+
+    // If zoom level hasn't changed, return
+    if (newZoomLevel === this.zoomLevel) return;
+
+    // Calculate point position relative to viewBox
+    const pointRelX = (point.x - this.viewBox.x) / this.viewBox.width;
+    const pointRelY = (point.y - this.viewBox.y) / this.viewBox.height;
+
+    // Calculate new viewBox dimensions
+    const zoomRatio = this.zoomLevel / newZoomLevel;
+    const newWidth = this.viewBox.width * zoomRatio;
+    const newHeight = this.viewBox.height * zoomRatio;
+
+    // Calculate new viewBox position to keep the point at the same relative position
+    const newX = point.x - pointRelX * newWidth;
+    const newY = point.y - pointRelY * newHeight;
+
+    // Update viewBox
+    this.viewBox = {
+      x: newX,
+      y: newY,
+      width: newWidth,
+      height: newHeight,
+    };
+
+    // Constrain panning to prevent going too far
+    const maxX = this.scrollableWidth - this.viewBox.width;
+    this.viewBox.x = Math.max(0, Math.min(this.viewBox.x, maxX));
+    this.viewBox.y = Math.max(
+      0,
+      Math.min(this.viewBox.y, this.height - this.viewBox.height),
+    );
+
+    this.updateViewBox();
+
+    // Update zoom level
+    this.zoomLevel = newZoomLevel;
+
+    // Update zoom indicator
+    const zoomIndicator = document.querySelector(".zoom-level") as HTMLElement;
+    if (zoomIndicator) {
+      zoomIndicator.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+    }
+  }
+
+  private resetZoom() {
+    this.zoomLevel = 1;
+    this.viewBox = {
+      x: 0,
+      y: 0,
+      width: this.scrollableWidth,
+      height: this.height,
+    };
+    this.updateViewBox();
   }
 
   private addSvgDefs() {
@@ -132,10 +371,11 @@ export class GanttChart<T extends Task> {
   }
 
   private render() {
-    // Create tooltip
-    const tooltip = document.createElement("div");
-    tooltip.className = "tooltip";
-    document.body.appendChild(tooltip);
+    // Clear existing content
+    while (this.svgContent.firstChild) {
+      this.svgContent.removeChild(this.svgContent.firstChild);
+    }
+    this.tableContainer.innerHTML = "";
 
     // Group tasks by priority (main group)
     const tasksByPriorityGroup: Record<number, T[]> = {};
@@ -155,29 +395,12 @@ export class GanttChart<T extends Task> {
       );
     });
 
-    // Calculate date range
-    const timestamps = this.tasks.flatMap((t: T) => [
-      new Date(t.start).getTime(),
-      new Date(t.end).getTime(),
-    ]);
-    const minDate = new Date(Math.min(...timestamps));
-    minDate.setDate(minDate.getDate() - 15); // Buffer: 15 days before
-    const maxDate = new Date(Math.max(...timestamps));
-    maxDate.setDate(maxDate.getDate() + 15); // Buffer: 15 days after
-
-    // Ensure we have at least the configured number of months
-    const currentRange =
-      (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
-    if (currentRange < (this.config.timelineMonths || 12)) {
-      maxDate.setMonth(minDate.getMonth() + (this.config.timelineMonths || 12));
-    }
-
     // X-scale for timeline
     const xScale = (date: Date): number => {
       return (
         this.margin.left +
-        ((date.getTime() - minDate.getTime()) /
-          (maxDate.getTime() - minDate.getTime())) *
+        ((date.getTime() - this.minDate.getTime()) /
+          (this.maxDate.getTime() - this.minDate.getTime())) *
           (this.scrollableWidth - this.margin.left - this.margin.right)
       );
     };
@@ -193,8 +416,9 @@ export class GanttChart<T extends Task> {
 
     // Render background grid
     const grid = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    grid.setAttribute("class", "grid");
     const days =
-      (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+      (this.maxDate.getTime() - this.minDate.getTime()) / (1000 * 60 * 60 * 24);
     const interval = Math.ceil(days / 20); // Approx 20 intervals
 
     // Add month labels at the top
@@ -204,10 +428,10 @@ export class GanttChart<T extends Task> {
     );
     monthLabels.setAttribute("class", "month-labels");
 
-    const currentMonth = new Date(minDate);
+    const currentMonth = new Date(this.minDate);
     currentMonth.setDate(1); // Start at the beginning of the month
 
-    while (currentMonth <= maxDate) {
+    while (currentMonth <= this.maxDate) {
       const x = xScale(currentMonth);
 
       const monthLabel = document.createElementNS(
@@ -243,12 +467,12 @@ export class GanttChart<T extends Task> {
       currentMonth.setMonth(currentMonth.getMonth() + 1);
     }
 
-    this.svg.appendChild(monthLabels);
+    this.svgContent.appendChild(monthLabels);
 
     // Add day grid lines
     for (
-      let d = new Date(minDate);
-      d <= maxDate;
+      let d = new Date(this.minDate);
+      d <= this.maxDate;
       d.setDate(d.getDate() + interval)
     ) {
       const x = xScale(d);
@@ -277,7 +501,7 @@ export class GanttChart<T extends Task> {
       });
       grid.appendChild(text);
     }
-    this.svg.appendChild(grid);
+    this.svgContent.appendChild(grid);
 
     // Render timeline
     const timeline = document.createElementNS(
@@ -292,7 +516,38 @@ export class GanttChart<T extends Task> {
     timeline.setAttribute("y1", (this.margin.top - 10).toString());
     timeline.setAttribute("y2", (this.margin.top - 10).toString());
     timeline.setAttribute("class", "timeline");
-    this.svg.appendChild(timeline);
+    this.svgContent.appendChild(timeline);
+
+    // Add today marker if within range
+    const today = new Date();
+    if (today >= this.minDate && today <= this.maxDate) {
+      const todayX = xScale(today);
+      const todayLine = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "line",
+      );
+      todayLine.setAttribute("x1", todayX.toString());
+      todayLine.setAttribute("x2", todayX.toString());
+      todayLine.setAttribute("y1", (this.margin.top - 10).toString());
+      todayLine.setAttribute(
+        "y2",
+        (this.height - this.margin.bottom).toString(),
+      );
+      todayLine.setAttribute("class", "today-line");
+
+      const todayLabel = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text",
+      );
+      todayLabel.setAttribute("x", todayX.toString());
+      todayLabel.setAttribute("y", (this.margin.top - 45).toString());
+      todayLabel.setAttribute("text-anchor", "middle");
+      todayLabel.setAttribute("class", "today-label");
+      todayLabel.textContent = "Today";
+
+      this.svgContent.appendChild(todayLine);
+      this.svgContent.appendChild(todayLabel);
+    }
 
     // Render tasks by priority group
     let yOffset = this.margin.top;
@@ -310,7 +565,7 @@ export class GanttChart<T extends Task> {
       groupHeader.setAttribute("y", (yOffset - 5).toString());
       groupHeader.setAttribute("class", "priority-group-header");
       groupHeader.textContent = `Priority ${priorityGroup}`;
-      this.svg.appendChild(groupHeader);
+      this.svgContent.appendChild(groupHeader);
 
       // Add table rows for this priority group
       taskGroup.forEach((task, i) => {
@@ -333,6 +588,13 @@ export class GanttChart<T extends Task> {
         const endX = xScale(new Date(task.end));
         const barWidth = Math.max(endX - startX, 10); // Minimum width
 
+        // Create a group for the task
+        const taskGroup = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "g",
+        );
+        taskGroup.setAttribute("class", "task-group");
+
         // Task bar
         const rect = document.createElementNS(
           "http://www.w3.org/2000/svg",
@@ -347,6 +609,7 @@ export class GanttChart<T extends Task> {
           `task priority-${Math.floor(task.priority)}`,
         );
         rect.setAttribute("rx", "6"); // Rounded corners
+        taskGroup.appendChild(rect);
 
         // Generate tooltip content
         let tooltipContent = `<div class="tooltip-header" style="background: ${this.getPriorityColor(task.priority)}">
@@ -378,24 +641,6 @@ export class GanttChart<T extends Task> {
 
         tooltipContent += "</div>";
 
-        rect.setAttribute("data-tooltip", tooltipContent);
-        this.svg.appendChild(rect);
-
-        // Task progress indicator (decorative element)
-        const progressWidth = barWidth * 0.7; // Just a visual element, not functional
-        const progress = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "rect",
-        );
-        progress.setAttribute("x", startX.toString());
-        progress.setAttribute("y", y.toString());
-        progress.setAttribute("width", progressWidth.toString());
-        progress.setAttribute("height", "30");
-        progress.setAttribute("class", "task-progress");
-        progress.setAttribute("rx", "6");
-        progress.setAttribute("opacity", "0.3");
-        this.svg.appendChild(progress);
-
         // Task name on bar
         const text = document.createElementNS(
           "http://www.w3.org/2000/svg",
@@ -412,7 +657,7 @@ export class GanttChart<T extends Task> {
           name.length > maxTextLength
             ? name.substring(0, maxTextLength - 3) + "..."
             : name;
-        this.svg.appendChild(text);
+        taskGroup.appendChild(text);
 
         // Date range indicator
         const dateText = document.createElementNS(
@@ -435,8 +680,25 @@ export class GanttChart<T extends Task> {
             day: "numeric",
           });
           dateText.textContent = `${startDate} - ${endDate}`;
-          this.svg.appendChild(dateText);
+          taskGroup.appendChild(dateText);
         }
+
+        // Add invisible overlay for better tooltip handling
+        const overlay = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "rect",
+        );
+        overlay.setAttribute("x", startX.toString());
+        overlay.setAttribute("y", y.toString());
+        overlay.setAttribute("width", barWidth.toString());
+        overlay.setAttribute("height", "30");
+        overlay.setAttribute("fill", "transparent");
+        overlay.setAttribute("class", "task-overlay");
+        overlay.setAttribute("data-tooltip", tooltipContent);
+        taskGroup.appendChild(overlay);
+
+        // Add the task group to the SVG
+        this.svgContent.appendChild(taskGroup);
       });
 
       yOffset += taskGroup.length * 40 + 30;
@@ -452,7 +714,7 @@ export class GanttChart<T extends Task> {
         separator.setAttribute("y1", (yOffset - 15).toString());
         separator.setAttribute("y2", (yOffset - 15).toString());
         separator.setAttribute("class", "separator");
-        this.svg.appendChild(separator);
+        this.svgContent.appendChild(separator);
 
         // Add separator to table as well
         const tableSeparator = document.createElement("div");
@@ -462,41 +724,49 @@ export class GanttChart<T extends Task> {
     });
 
     // Adjust SVG height based on content
-    this.svg.setAttribute("height", (yOffset + 20).toString());
-    this.svg.setAttribute(
-      "viewBox",
-      `0 0 ${this.scrollableWidth} ${yOffset + 20}`,
-    );
+    this.height = yOffset + 20;
+    this.svg.setAttribute("height", this.height.toString());
+    this.viewBox.height = this.height;
+    this.updateViewBox();
 
-    // Tooltip handling with scroll adjustment
+    // Tooltip handling with better event delegation
     this.svg.addEventListener("mousemove", (e: MouseEvent) => {
       const target = e.target as SVGElement;
-      if (target.classList.contains("task")) {
-        const rect = target.getBoundingClientRect();
-        tooltip.style.display = "block";
-        tooltip.innerHTML = target.getAttribute("data-tooltip") || "";
-        tooltip.style.left = `${e.clientX + 10}px`; // Use clientX for scroll-adjusted position
-        tooltip.style.top = `${e.clientY + 10}px`; // Use clientY
-        tooltip.classList.add("visible");
+
+      // Find the closest task-overlay element
+      let overlayElement = target;
+      if (!target.classList.contains("task-overlay")) {
+        const parent = target.closest(".task-group");
+        if (parent) {
+          overlayElement = parent.querySelector(".task-overlay") as SVGElement;
+        }
+      }
+
+      if (overlayElement && overlayElement.classList.contains("task-overlay")) {
+        const tooltipContent = overlayElement.getAttribute("data-tooltip");
+        if (tooltipContent) {
+          this.tooltip.style.display = "block";
+          this.tooltip.innerHTML = tooltipContent;
+          this.tooltip.style.left = `${e.clientX + 10}px`;
+          this.tooltip.style.top = `${e.clientY + 10}px`;
+          this.tooltip.classList.add("visible");
+        }
       } else {
-        tooltip.classList.remove("visible");
+        this.tooltip.classList.remove("visible");
       }
     });
 
     this.svg.addEventListener("mouseleave", () => {
-      tooltip.classList.remove("visible");
+      this.tooltip.classList.remove("visible");
     });
 
     // Synchronize scrolling between table and chart
-    const svgContainer = this.chartContainer.querySelector(
-      ".gantt-svg-container",
-    ) as HTMLElement;
-    svgContainer.addEventListener("scroll", () => {
-      this.tableContainer.scrollTop = svgContainer.scrollTop;
+    this.svgContainer.addEventListener("scroll", () => {
+      this.tableContainer.scrollTop = this.svgContainer.scrollTop;
     });
 
     this.tableContainer.addEventListener("scroll", () => {
-      svgContainer.scrollTop = this.tableContainer.scrollTop;
+      this.svgContainer.scrollTop = this.tableContainer.scrollTop;
     });
   }
 

@@ -1,6 +1,7 @@
 import type { Task, GanttConfig } from "./types";
 export declare class GanttChart<T extends Task> {
     private svg;
+    private svgContent;
     private tasks;
     private config;
     private width;
@@ -9,7 +10,20 @@ export declare class GanttChart<T extends Task> {
     private scrollableWidth;
     private tableContainer;
     private chartContainer;
+    private svgContainer;
+    private zoomLevel;
+    private minDate;
+    private maxDate;
+    private isDragging;
+    private dragStartX;
+    private viewBox;
+    private tooltip;
     constructor(containerId: string, tasks: T[], config: GanttConfig<T>);
+    private setupPanEvents;
+    private updateViewBox;
+    private zoom;
+    private zoomAtPoint;
+    private resetZoom;
     private addSvgDefs;
     private lightenColor;
     private render;
