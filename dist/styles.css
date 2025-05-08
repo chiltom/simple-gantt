@@ -83,12 +83,20 @@
   color: var(--gantt-text);
 }
 
-.gantt-table-cell:first-child {
-  flex: 0 0 80px;
+.gantt-table-cell.priority-header {
+  flex: 0 0 70px;
+  font-size: 13px;
 }
 
-.gantt-table-cell:last-child {
+.priority-cell {
+  flex: 0 0 70px;
+}
+
+.task-name-cell {
   flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gantt-table-separator {
@@ -100,11 +108,11 @@
 
 .priority-badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 1px 6px;
+  border-radius: 10px;
   color: white;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   text-align: center;
 }
 
@@ -142,7 +150,7 @@ svg {
 }
 
 .date-label {
-  font-size: 12px;
+  font-size: 11px;
   fill: var(--gantt-text-light);
   font-weight: 500;
 }
@@ -189,6 +197,18 @@ svg {
     filter 0.2s ease;
 }
 
+/* Fix progress text styling */
+.progress-text {
+  pointer-events: none;
+  dominant-baseline: middle;
+  font-weight: 600;
+}
+
+/* Remove task-progress class as we're not using it anymore */
+.task-progress {
+  display: none;
+}
+
 .task-group:hover .task {
   transform: translateY(-2px);
   filter: drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.15));
@@ -215,6 +235,7 @@ svg {
 }
 
 /* Tooltip styling */
+/* Fix tooltip styles to ensure they stay visible and interactive */
 .tooltip {
   position: fixed;
   background: var(--gantt-tooltip-bg);
@@ -222,24 +243,20 @@ svg {
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.6;
-  pointer-events: none;
   display: none;
   box-shadow: 0 4px 12px var(--gantt-tooltip-shadow);
-  transform: translateY(0);
-  transition:
-    transform 0.2s ease,
-    opacity 0.2s ease;
   opacity: 0;
   border: 1px solid var(--gantt-tooltip-border);
   max-width: 320px;
   z-index: 1000;
   overflow: hidden;
+  pointer-events: auto; /* Always allow interaction */
+  transition: opacity 0.2s ease;
 }
 
 .tooltip.visible {
   display: block;
   opacity: 1;
-  transform: translateY(-5px);
 }
 
 .tooltip-header {
@@ -301,6 +318,36 @@ svg {
   margin-bottom: 4px;
 }
 
+/* Add styles for links in tooltips */
+.tooltip a {
+  color: #3b82f6;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.tooltip a:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* Add styles for tooltip buttons */
+.tooltip-button {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  text-decoration: none;
+  color: #1f2937;
+  margin-right: 8px;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tooltip-button:hover {
+  background-color: #e5e7eb;
+}
+
 /* Zoom and pan controls */
 .gantt-controls {
   display: flex;
@@ -312,6 +359,13 @@ svg {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+
+.zoom-level {
+  font-size: 12px;
+  padding: 0 5px;
+  min-width: 40px;
+  text-align: center;
 }
 
 .zoom-btn {

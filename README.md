@@ -50,6 +50,55 @@ new GanttChart("gantt-container", tasks, {
 });
 ```
 
+> Note: If you would like to use a custom HTML tooltip, use the following
+> property and define it within the constructor:
+
+```ts
+// Example with custom tooltip renderer
+new GanttChart("gantt-container", tasks, {
+  tooltipFields: ["name", "start", "end", "priority", "owner"],
+  showTaskList: true,
+  timelineMonths: 3,
+  customTooltipRenderer: function (task) {
+    return `
+        <div class="tooltip-header" style="background: ${task.priority < 2 ? "#3b82f6" : task.priority < 3 ? "#ec4899" : "#10b981"}">
+          <span class="tooltip-priority">Priority ${task.priority.toFixed(1)}</span>
+          <span class="tooltip-title">${task.name}</span>
+        </div>
+        <div class="tooltip-content">
+          <div class="tooltip-row">
+            <span class="tooltip-label">Duration:</span> 
+            <span class="tooltip-value">${new Date(task.start).toLocaleDateString()} to ${new Date(task.end).toLocaleDateString()}</span>
+          </div>
+          <div class="tooltip-row">
+            <span class="tooltip-label">Owner:</span> 
+            <span class="tooltip-value">${task.owner}</span>
+          </div>
+          <div class="tooltip-row">
+            <span class="tooltip-label">Progress:</span> 
+            <span class="tooltip-value">${task.progress}%</span>
+          </div>
+          <div class="tooltip-section">
+            <div class="tooltip-section-header">Actions:</div>
+            <div style="margin-top: 8px;">
+              <a href="#" onclick="alert('View details for task: ${task.id}'); return false;" 
+                 style="display: inline-block; padding: 4px 8px; background: #f3f4f6; border-radius: 4px; 
+                        text-decoration: none; color: #1f2937; margin-right: 8px;">
+                View Details
+              </a>
+              <a href="#" onclick="alert('Edit task: ${task.id}'); return false;" 
+                 style="display: inline-block; padding: 4px 8px; background: #f3f4f6; border-radius: 4px; 
+                        text-decoration: none; color: #1f2937;">
+                Edit
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+  },
+});
+```
+
 ## Task Format
 
 Tasks must include `start`, `end`, `name`, `id`, and `priority`, but can have any additional fields:
@@ -76,6 +125,7 @@ interface GanttConfig<T extends Task> {
   colors?: {
     [priority: number]: string; // Custom colors for priority groups
   };
+  customTooltipRenderer?: (task: T) => string; // Custom tooltip renderer function
 }
 ```
 

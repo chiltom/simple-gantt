@@ -18,6 +18,9 @@ export declare class GanttChart<T extends Task> {
     private dragStartX;
     private viewBox;
     private tooltip;
+    private initialDateRange;
+    private taskMinDate;
+    private taskMaxDate;
     constructor(containerId: string, tasks: T[], config: GanttConfig<T>);
     private setupPanEvents;
     private updateViewBox;
