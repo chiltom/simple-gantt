@@ -1,0 +1,423 @@
+:root {
+  --gantt-bg: #f9fafb;
+  --gantt-border: #e5e7eb;
+  --gantt-text: #1f2937;
+  --gantt-text-light: #6b7280;
+  --gantt-grid: #e5e7eb;
+  --gantt-timeline: #1f2937;
+  --gantt-separator: #d1d5db;
+  --gantt-table-bg: #ffffff;
+  --gantt-table-header-bg: #f3f4f6;
+  --gantt-table-border: #e5e7eb;
+  --gantt-tooltip-bg: #ffffff;
+  --gantt-tooltip-border: #e5e7eb;
+  --gantt-tooltip-shadow: rgba(0, 0, 0, 0.1);
+  --gantt-priority-1: #3b82f6;
+  --gantt-priority-2: #ec4899;
+  --gantt-priority-3: #10b981;
+  --gantt-priority-4: #f59e0b;
+  --gantt-priority-5: #8b5cf6;
+  --gantt-today-line: #ef4444;
+}
+
+.gantt-container {
+  margin: 20px;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--gantt-bg);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+.gantt-wrapper {
+  display: flex;
+  width: 100%;
+  border: 1px solid var(--gantt-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.gantt-table-container {
+  flex: 0 0 250px;
+  overflow-y: auto;
+  background: var(--gantt-table-bg);
+  border-right: 1px solid var(--gantt-border);
+  max-height: 600px;
+}
+
+.gantt-svg-container {
+  flex: 1;
+  overflow: hidden;
+  max-height: 600px;
+  position: relative;
+}
+
+.gantt-table-header {
+  display: flex;
+  background: var(--gantt-table-header-bg);
+  border-bottom: 1px solid var(--gantt-table-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.gantt-table-row {
+  display: flex;
+  border-bottom: 1px solid var(--gantt-table-border);
+  height: 40px;
+  align-items: center;
+}
+
+.gantt-table-cell {
+  padding: 8px 12px;
+}
+
+.gantt-table-cell.header {
+  font-weight: 600;
+  color: var(--gantt-text);
+}
+
+.gantt-table-cell.priority-header {
+  flex: 0 0 70px;
+  font-size: 13px;
+}
+
+.priority-cell {
+  flex: 0 0 70px;
+}
+
+.task-name-cell {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-table-separator {
+  height: 30px;
+  background: var(--gantt-table-header-bg);
+  border-bottom: 1px solid var(--gantt-table-border);
+  border-top: 1px solid var(--gantt-table-border);
+}
+
+.priority-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  color: white;
+  font-weight: 600;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* SVG Styles */
+svg {
+  display: block;
+}
+
+.grid-line {
+  stroke: var(--gantt-grid);
+  stroke-width: 1;
+  stroke-dasharray: 4, 4;
+}
+
+.month-line {
+  stroke: var(--gantt-separator);
+  stroke-width: 1;
+}
+
+.timeline {
+  stroke: var(--gantt-timeline);
+  stroke-width: 3;
+}
+
+.today-line {
+  stroke: var(--gantt-today-line);
+  stroke-width: 2;
+  stroke-dasharray: 5, 3;
+}
+
+.today-label {
+  font-size: 12px;
+  fill: var(--gantt-today-line);
+  font-weight: 600;
+}
+
+.date-label {
+  font-size: 11px;
+  fill: var(--gantt-text-light);
+  font-weight: 500;
+}
+
+.month-label {
+  font-size: 14px;
+  fill: var(--gantt-text);
+  font-weight: 600;
+}
+
+.task-name {
+  font-size: 13px;
+  fill: #ffffff;
+  font-weight: 600;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.date-range {
+  font-size: 11px;
+  fill: rgba(255, 255, 255, 0.9);
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.priority-group-header {
+  font-size: 14px;
+  fill: var(--gantt-text);
+  font-weight: 600;
+}
+
+.separator {
+  stroke: var(--gantt-separator);
+  stroke-width: 2;
+  stroke-dasharray: 5, 5;
+}
+
+/* Task styling */
+.task {
+  stroke: none;
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
+  transition:
+    transform 0.2s ease,
+    filter 0.2s ease;
+}
+
+/* Fix progress text styling */
+.progress-text {
+  pointer-events: none;
+  dominant-baseline: middle;
+  font-weight: 600;
+}
+
+/* Remove task-progress class as we're not using it anymore */
+.task-progress {
+  display: none;
+}
+
+.task-group:hover .task {
+  transform: translateY(-2px);
+  filter: drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.15));
+}
+
+.priority-1 {
+  fill: url(#gradient-1);
+}
+
+.priority-2 {
+  fill: url(#gradient-2);
+}
+
+.priority-3 {
+  fill: url(#gradient-3);
+}
+
+.priority-4 {
+  fill: url(#gradient-4);
+}
+
+.priority-5 {
+  fill: url(#gradient-5);
+}
+
+/* Tooltip styling */
+/* Fix tooltip styles to ensure they stay visible and interactive */
+.tooltip {
+  position: fixed;
+  background: var(--gantt-tooltip-bg);
+  color: var(--gantt-text);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  display: none;
+  box-shadow: 0 4px 12px var(--gantt-tooltip-shadow);
+  opacity: 0;
+  border: 1px solid var(--gantt-tooltip-border);
+  max-width: 320px;
+  z-index: 1000;
+  overflow: hidden;
+  pointer-events: auto; /* Always allow interaction */
+  transition: opacity 0.2s ease;
+}
+
+.tooltip.visible {
+  display: block;
+  opacity: 1;
+}
+
+.tooltip-header {
+  padding: 10px 12px;
+  color: white;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+}
+
+.tooltip-priority {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
+.tooltip-title {
+  font-size: 14px;
+}
+
+.tooltip-content {
+  padding: 12px;
+}
+
+.tooltip-row {
+  margin-bottom: 6px;
+  display: flex;
+  align-items: baseline;
+}
+
+.tooltip-label {
+  font-weight: 600;
+  margin-right: 8px;
+  color: var(--gantt-text);
+  flex: 0 0 80px;
+}
+
+.tooltip-value {
+  color: var(--gantt-text);
+}
+
+.tooltip-section {
+  margin-top: 10px;
+  border-top: 1px solid var(--gantt-tooltip-border);
+  padding-top: 10px;
+}
+
+.tooltip-section-header {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.tooltip-task-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.tooltip-task-list li {
+  margin-bottom: 4px;
+}
+
+/* Add styles for links in tooltips */
+.tooltip a {
+  color: #3b82f6;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.tooltip a:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* Add styles for tooltip buttons */
+.tooltip-button {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  text-decoration: none;
+  color: #1f2937;
+  margin-right: 8px;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tooltip-button:hover {
+  background-color: #e5e7eb;
+}
+
+/* Zoom and pan controls */
+.gantt-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.zoom-level {
+  font-size: 12px;
+  padding: 0 5px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.zoom-btn {
+  background: white;
+  border: 1px solid var(--gantt-border);
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.zoom-btn:hover {
+  background-color: #f3f4f6;
+}
+
+.zoom-reset {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .gantt-container {
+    margin: 10px;
+    padding: 10px;
+  }
+
+  .gantt-wrapper {
+    flex-direction: column;
+  }
+
+  .gantt-table-container {
+    flex: none;
+    width: 100%;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--gantt-border);
+  }
+
+  .task-name,
+  .date-label,
+  .month-label {
+    font-size: 11px;
+  }
+
+  .zoom-controls {
+    flex-wrap: wrap;
+  }
+}

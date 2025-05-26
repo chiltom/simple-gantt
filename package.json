@@ -1,15 +1,17 @@
 {
-    "name": "gantt-chart",
-    "version": "1.0.0",
+    "name": "simple-gantt",
+    "version": "0.0.0",
     "description": "A lightweight, static SVG Gantt chart package",
-    "main": "dist/gantt.js",
-    "types": "dist/gantt.d.ts",
+    "main": "dist/js/index.js",
+    "types": "dist/js/index.d.ts",
     "scripts": {
-        "build": "tsc && cp src/styles.css dist/styles.css"
+        "build": "tsc && cp ./dist/js/* ./go-dev-server/static/js/ && cp ./styles.css ./go-dev-server/static/css/gantt_styles.css && cp ./styles.css ./dist/css/",
+        "dev": "go run ./go-dev-server/main.go",
+        "build:watch": "tsc --watch"
     },
-    "author": "",
-    "license": "MIT",
     "devDependencies": {
         "typescript": "^5.2.2"
-    }
+    },
+    "author": "Tom Childress",
+    "license": "MIT"
 }

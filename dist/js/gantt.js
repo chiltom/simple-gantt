@@ -59,13 +59,18 @@ export class GanttChart {
         // Add SVG definitions for gradients
         this.addSvgDefs();
         this.tasks = tasks;
-        this.config = Object.assign({ timelineMonths: 12, showTaskList: true, colors: {
+        this.config = {
+            timelineMonths: 12,
+            showTaskList: true,
+            colors: {
                 1: "#3b82f6", // Blue
                 2: "#ec4899", // Pink
                 3: "#10b981", // Green
                 4: "#f59e0b", // Amber
                 5: "#8b5cf6", // Purple
-            } }, config);
+            },
+            ...config,
+        };
         // Create tooltip
         this.tooltip = document.createElement("div");
         this.tooltip.className = "tooltip";

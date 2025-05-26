@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enhanced Gantt Chart Demo</title>
+    <link rel="stylesheet" href="css/gantt_styles.css" />
+    <style>
+      /* Basic page styles for the wrapper */
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        background-color: #f0f0f0;
+      }
+      #gantt-container-wrapper {
+        width: 90vw;
+        max-width: 1200px;
+        min-height: 400px;
+        margin: 20px auto;
+        border: 1px solid #ccc;
+        background-color: #fff;
+        padding: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- This div is where the Gantt chart will be rendered by the JavaScript code -->
+    <div id="gantt-container-wrapper">
+      <!-- The GanttChart class will create its own internal DOM structure *inside* this element -->
+    </div>
+
+    <!-- Link to the built JavaScript file -->
+    <!-- type="module" allows us to use ES6 import/export syntax in our JS -->
+    <script type="module">
+      // Import the GanttChart class from compiled TypeScript
+      // The path "./js/index.js" is relative to index.html, so it points to go-dev-server/static/js/index.js
+      import { GanttChart } from "./js/index.js";
+
+      // Wait for the HTML document to be fully loaded before running the script
+      document.addEventListener("DOMContentLoaded", () => {
+        // Sample data
+        const sampleItems = [
+          {
+            id: 1,
+            priority: 1.1,
+            name: "Feature A (Dev)",
+            start: "2025-06-01",
+            end: "2025-06-10",
+            progress: 25,
+          },
+          {
+            id: 2,
+            priority: 2.1,
+            name: "Feature B (Dev)",
+            start: "2025-06-05",
+            end: "2025-06-15",
+            progress: 50,
+          },
+          {
+            id: 3,
+            priority: 1.2,
+            name: "Feature C (Dev)",
+            start: "2025-06-12",
+            end: "2025-06-25",
+            progress: 75,
+          },
+          {
+            id: 4,
+            priority: 3.1,
+            name: "Bugfix X (Dev)",
+            start: "2025-06-18",
+            end: "2025-06-22",
+            progress: 100,
+          },
+        ];
+
+        // Configuration options for the Gantt chart
+        const ganttConfig = {
+          // Example: colors { 1: "#dbeafe", 2: "#fee2e2"}, // We'll define better colors later
+        };
+
+        // Get the container element where the Gantt chart will be placed
+        const containerElement = document.getElementById(
+          "gantt-container-wrapper",
+        );
+
+        if (!containerElement) {
+          console.error(
+            "Gantt chart container 'gantt-container-wrapper' not found in the HTML.",
+          );
+          return; // Stop if the container doesn't exist
+        }
+
+        try {
+          // Create a new instance of the GanttChart
+          // The first argument is the ID of its container div
+          // The GanttChart class will handle rendering inside of the div
+          new GanttChart("gantt-container-wrapper", sampleItems, ganttConfig);
+          console.log(
+            "Gantt chart initialization script executed (dummy chart for now).",
+          );
+        } catch (error) {
+          console.error("Error initializing Gantt chart:", error);
+          if (containerElement) {
+            containerElement.innerHTML = `<p style="color:red; font-weight:bold;">Error initializing Gantt Chart: ${error.Message}. Check console for details.</p>`;
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
