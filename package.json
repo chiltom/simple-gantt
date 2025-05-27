@@ -5,7 +5,7 @@
     "main": "dist/js/index.js",
     "types": "dist/js/index.d.ts",
     "scripts": {
-        "build": "tsc && cp ./dist/js/* ./go-dev-server/static/js/ && cp ./styles.css ./go-dev-server/static/css/gantt_styles.css && cp ./styles.css ./dist/css/",
+        "build": "tsc && rm -rf ./go-dev-server/static/js && mkdir -p ./go-dev-server/static/js && cp -r ./dist/js/. ./go-dev-server/static/js/ && rm -rf ./go-dev-server/static/css/ && mkdir -p ./go-dev-server/static/css/ && cp ./styles.css ./go-dev-server/static/css/gantt_styles.css",
         "dev": "go run ./go-dev-server/main.go",
         "build:watch": "tsc --watch"
     },

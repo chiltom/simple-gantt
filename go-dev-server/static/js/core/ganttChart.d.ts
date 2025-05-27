@@ -1,0 +1,30 @@
+import type { Item } from "./item.js";
+import type { GanttConfig } from "./config.js";
+export declare class GanttChart<T extends Item> {
+    readonly config: GanttConfig<T>;
+    private items;
+    private dom;
+    private overallDateRange;
+    private currentZoomLevel;
+    private currentViewBox;
+    private svgInitialWidth;
+    private svgComputedHeight;
+    private readonly margins;
+    constructor(parentElementId: string, items: T[], userConfig?: Partial<GanttConfig<T>>);
+    private preprocessItems;
+    private setupEventHandlers;
+    render(): void;
+    private updateSvgViewBox;
+    private getVisibleDateRange;
+    updateItems(newItems: T[]): void;
+    updateConfig(newConfig: Partial<GanttConfig<T>>): void;
+    zoom(delta: number): void;
+    zoomAtPoint(delta: number, mouseX: number, mouseY: number, isViewBoxPoint?: boolean): void;
+    private constrainViewBox;
+    resetZoom(): void;
+    pan(dxScreen: number, dyScreen: number): void;
+    getSvgRect(): DOMRect | null;
+    destroy(): void;
+    minimize(): void;
+    maximize(): void;
+}
