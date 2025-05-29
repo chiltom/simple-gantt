@@ -43,7 +43,8 @@ export function createDOMStructure(parentElementId, config) {
     const tableContainer = document.createElement("div");
     tableContainer.className = "gantt-table-container";
     tableContainer.style.flex = "0 0 60px"; // 60px width, no grow, no shrink
-    tableContainer.style.overflowY = "hidden"; // Scroll synchronized with SVG
+    tableContainer.style.overflowY = "hidden";
+    tableContainer.style.position = "relative"; // For potential sticky header within table
     mainContentWrapper.appendChild(tableContainer);
     // SVG container
     const svgContainer = document.createElement("div");

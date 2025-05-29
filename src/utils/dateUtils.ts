@@ -1,9 +1,45 @@
 import type { Item } from "../core/item.js";
 
+/* ==============================================
+ * {@code type} and {@code interface} definitions
+ * ==============================================
+ */
+
+/*
+ * Represents a date range for the Gantt Chart
+ */
 export interface DateRange {
   minDate: Date;
   maxDate: Date;
 }
+
+/**
+ * Represents a single time marking for display on the timeline.
+ */
+export interface Tick {
+  x: number;
+  label: string;
+  isMajor?: boolean; // For styling major vs. minor ticks if needed
+}
+
+/**
+ * Represents a time interval for display on the timeline.
+ */
+export interface TimeInterval {
+  unit: "year" | "month" | "week" | "day" | "hour";
+  getTicks: (
+    minDate: Date,
+    maxDate: Date,
+    xScale: (date: Date) => number,
+    availableWidth: number,
+  ) => Tick[];
+  getHeaderLabel?: (minDate: Date, maxDate: Date) => string | null;
+}
+
+/* ===========================
+ * Exported method definitions
+ * ===========================
+ */
 
 /**
  * Calculates the overall min and max dates from a list of items.
@@ -80,78 +116,101 @@ export function createXScale(
 }
 
 /**
- * Represents a time interval for display on the timeline.
+ * Determines which time intervals to use for the Gantt Chart
+ * dependent upon the provided date range.
+ * @param minVisibleDate The minimum visible date for the scale.
+ * @param maxVisibleDate The maximum visible date for the scale.
+ * @param availableWidth The width available for the date interval drawing.
+ * @returns Optional primary and secondary time intervals for the given dates.
  */
-export interface TimeInterval {
-  unit: "year" | "month" | "week" | "day" | "hour";
-  labelFormat: Intl.DateTimeFormatOptions;
-  getTicks: (
-    minDate: Date,
-    maxDate: Date,
-    xScale: (date: Date) => number,
-  ) => { x: number; label: string }[];
-  getSubTicks?: (
-    minDate: Date,
-    maxDate: Date,
-    xScale: (date: Date) => number,
-  ) => { x: number; label: string }[]; // For day/hour lines under month
-}
-
-// TODO: This is a simplified version. The original had more complex logic for choosing
-// intervals. We'll need to expand this to match the original's dynamic interval selection based on zoom.
-//
-// A basic month/day setup.
-// @param minVisibleDate The minimum date to show within the interval.
-// @param maxVisibleDate The maximum date to show within the interval.
-// @param availableWidth The container width available to fit the time interval.
-export function getAppropriateTimeIntervals(
+export function getAdaptiveTimeIntervals(
   minVisibleDate: Date,
   maxVisibleDate: Date,
-): { primaryInterval: TimeInterval; secondaryInterval?: TimeInterval } {
-  const visibleDurationDays: number =
-    (maxVisibleDate.getTime() - minVisibleDate.getTime()) /
-    (1000 * 60 * 60 * 24);
+  availableWidth: number,
+): { primary?: TimeInterval; secondary?: TimeInterval } {
+  const visibleDurationMs: number =
+    maxVisibleDate.getTime() - minVisibleDate.getTime();
+  if (visibleDurationMs <= 0 || availableWidth <= 0) return {};
 
-  // Very basic logic, needs refinement based on original's pixelPerDay etc.
-  if (visibleDurationDays > 365 * 2) {
-    // More than 2 years -> show years
-    return { primaryInterval: getYearInterval() };
-  } else if (visibleDurationDays > 90) {
-    // More than 3 months -> show months
-    return {
-      primaryInterval: getMonthInterval(),
-      secondaryInterval: getDayInterval(true),
-    };
-  } else if (visibleDurationDays > 14) {
-    // More than 2 weeks -> show weeks (and days)
-    return {
-      primaryInterval: getWeekInterval(),
-      secondaryInterval: getDayInterval(),
-    };
+  const visibleDurationDays: number = visibleDurationMs / (1000 * 60 * 60 * 24);
+  const pixelsPerDay: number =
+    availableWidth / Math.max(1, visibleDurationDays);
+
+  // Primary hierarchy: Year -> Month -> Week -> Day
+  if (pixelsPerDay < 2) {
+    // Very zoomed out, likely multiple years visible
+    // Primary: Years, Secondary: Months (if space)
+    const pixelsPerYear: number = pixelsPerDay * 365.25;
+    if (pixelsPerYear / 12 > MIN_PIXELS_FOR_LABEL) {
+      // If months under years have space
+      return { primary: getYearInterval(), secondary: getMonthInterval() };
+    }
+    return { primary: getYearInterval() };
+  } else if (pixelsPerDay < 25) {
+    // Likely multiple months visible
+    // Primary: Months, Secondary: Weeks (if space)
+    const pixelsPerMonth: number = pixelsPerDay * 30.44;
+    if (pixelsPerMonth / 4 > MIN_PIXELS_FOR_LABEL) {
+      // If weeks under months have space
+      return { primary: getMonthInterval(), secondary: getWeekInterval() };
+    }
+    return { primary: getMonthInterval() };
+  } else if (pixelsPerDay < 100) {
+    // Likely multiple days or weeks visible
+    // Primary: Weeks, Secondary: Days (if space)
+    const pixelsPerWeek: number = pixelsPerDay * 7;
+    if (pixelsPerWeek / 7 > MIN_PIXELS_FOR_DAY_NUMBER) {
+      // If days under weeks have space
+      return { primary: getWeekInterval(), secondary: getDayInterval() };
+    }
+    return { primary: getWeekInterval() }; // Or just days if weeks are too cramped
   } else {
-    // Default to days (and potentially hours if very zoomed in)
-    return {
-      primaryInterval: getDayInterval(),
-      secondaryInterval: getHourInterval(),
-    };
+    // Days are clearly visible
+    // Primary: Days. Secondary could be hours if extremely zoomed, or nothing.
+    return { primary: getDayInterval() };
   }
 }
+
+/* =======================================================
+ * Helper methods to grab appropriate time interval values
+ * =======================================================
+ */
+
+const MIN_PIXELS_FOR_LABEL: number = 50; // Minimum space for a text label to be somewhat readable
+const MIN_PIXELS_FOR_MAJOR_LABEL: number = 70;
+const MIN_PIXELS_FOR_DAY_NUMBER: number = 20; // For just "1", "2", "3"
 
 function getYearInterval(): TimeInterval {
   return {
     unit: "year",
-    labelFormat: { year: "numeric" },
-    getTicks: (minDate, maxDate, xScale) => {
-      const ticks = [];
-      const current = new Date(minDate);
-      current.setDate(1);
-      current.setMonth(0); // Start of the year
-      while (current <= maxDate) {
+    getTicks: (minDate, maxDate, xScale, availableWidth) => {
+      const ticks: Tick[] = [];
+      const startYear: number = minDate.getFullYear();
+      const endYear: number = maxDate.getFullYear();
+      const yearSpan: number = endYear - startYear + 1;
+      const pixelsPerYear: number = availableWidth / yearSpan;
+
+      let yearStep: number = 1;
+      if (pixelsPerYear < MIN_PIXELS_FOR_MAJOR_LABEL) {
+        yearStep = Math.ceil(MIN_PIXELS_FOR_MAJOR_LABEL / pixelsPerYear);
+      }
+
+      for (let year: number = startYear; year <= endYear; year += yearStep) {
+        const date: Date = new Date(year, 0, 1); // January 1st of the year
+        if (date > maxDate && ticks.length > 0) break; // Don't add tick beyond maxDate if we already have one
+        // Ensure first tick is not before minDate unless it's the only one
+        if (
+          date < minDate &&
+          year + yearStep > minDate.getFullYear() &&
+          year !== startYear
+        )
+          continue;
+
         ticks.push({
-          x: xScale(current),
-          label: current.toLocaleDateString(undefined, { year: "numeric" }),
+          x: xScale(date),
+          label: date.toLocaleDateString(undefined, { year: "numeric" }),
+          isMajor: true,
         });
-        current.setFullYear(current.getFullYear() + 1);
       }
       return ticks;
     },
@@ -161,20 +220,70 @@ function getYearInterval(): TimeInterval {
 function getMonthInterval(): TimeInterval {
   return {
     unit: "month",
-    labelFormat: { month: "long", year: "numeric" }, // For top header
-    getTicks: (minDate, maxDate, xScale) => {
-      const ticks = [];
-      const current = new Date(minDate);
-      current.setDate(1); // Start of the month
+    getTicks: (minDate, maxDate, xScale, availableWidth) => {
+      const ticks: Tick[] = [];
+      const current: Date = new Date(
+        minDate.getFullYear(),
+        minDate.getMonth(),
+        1,
+      );
+      const totalMonths: number =
+        (maxDate.getFullYear() - minDate.getFullYear()) * 12 +
+        (maxDate.getMonth() - minDate.getMonth()) +
+        1;
+      const pixelsPerMonth: number = availableWidth / Math.max(1, totalMonths);
+
+      let monthStep: number = 1;
+      if (pixelsPerMonth < MIN_PIXELS_FOR_MAJOR_LABEL) {
+        monthStep = Math.ceil(MIN_PIXELS_FOR_MAJOR_LABEL / pixelsPerMonth);
+        if (monthStep > 6) monthStep = 6; // Cap step to avoid too few labels (e.g., bi-annually)
+        if (monthStep === 5 || monthStep === 7) monthStep = 6; // Prefer even steps like 3, 6
+        if (monthStep === 4) monthStep = 3; // Prefer 3 over 4 for month steps
+      }
+
+      const labelFormat: Intl.DateTimeFormatOptions =
+        pixelsPerMonth > 70
+          ? { month: "long", year: "numeric" }
+          : pixelsPerMonth > 40
+            ? { month: "short", year: "numeric" }
+            : { month: "short" };
+
       while (current <= maxDate) {
         ticks.push({
           x: xScale(current),
-          label: current.toLocaleDateString(undefined, {
-            month: "long",
-            year: "numeric",
-          }),
+          label: current.toLocaleDateString(undefined, labelFormat),
+          isMajor: true,
         });
-        current.setMonth(current.getMonth() + 1);
+        current.setMonth(current.getMonth() + monthStep);
+        if (
+          monthStep > 1 &&
+          current.getMonth() !== 0 &&
+          ticks.length > 0 &&
+          current > maxDate
+        ) {
+          // If stepping causes us to jump over maxDate, and we are not at Jan (year boundary)
+          // try to add the last month if it's not too close
+          const lastMonthDate: Date = new Date(
+            maxDate.getFullYear(),
+            maxDate.getMonth(),
+            1,
+          );
+          if (
+            ticks.length === 0 ||
+            Math.abs(xScale(lastMonthDate) - ticks[ticks.length - 1].x) >
+              MIN_PIXELS_FOR_MAJOR_LABEL / 2
+          ) {
+            if (lastMonthDate <= maxDate) {
+              // Ensure it's not past maxDate
+              ticks.push({
+                x: xScale(lastMonthDate),
+                label: lastMonthDate.toLocaleDateString(undefined, labelFormat),
+                isMajor: true,
+              });
+            }
+          }
+          break;
+        }
       }
       return ticks;
     },
@@ -184,76 +293,71 @@ function getMonthInterval(): TimeInterval {
 function getWeekInterval(): TimeInterval {
   return {
     unit: "week",
-    labelFormat: { month: "short", day: "numeric" }, // Label for start of week
-    getTicks: (minDate, maxDate, xScale) => {
-      const ticks = [];
-      const current = new Date(minDate);
-      // Find the previous Monday (or current if it's Monday)
-      const dayOfWeek = current.getDay(); // Sunday = 0, Monday = 1, ...
-      current.setDate(
-        current.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1),
-      );
+    getTicks: (minDate, maxDate, xScale, availableWidth) => {
+      const ticks: Tick[] = [];
+      const current: Date = new Date(minDate);
+      current.setDate(current.getDate() - ((current.getDay() + 6) % 7)); // Start of the week (Monday)
+      current.setHours(0, 0, 0, 0);
+
+      const totalWeeks: number =
+        (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24 * 7);
+      const pixelsPerWeek: number = availableWidth / Math.max(1, totalWeeks);
+
+      let weekStep: number = 1;
+      if (pixelsPerWeek < MIN_PIXELS_FOR_LABEL) {
+        weekStep = Math.ceil(MIN_PIXELS_FOR_LABEL / pixelsPerWeek);
+      }
+
+      const labelFormat: Intl.DateTimeFormatOptions = {
+        month: "short",
+        day: "numeric",
+      };
 
       while (current <= maxDate) {
         ticks.push({
           x: xScale(current),
-          label: current.toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-          }),
+          label: current.toLocaleDateString(undefined, labelFormat),
+          isMajor: false, // Weeks are typically secondary to months
         });
-        current.setDate(current.getDate() + 7);
+        current.setDate(current.getDate() + 7 * weekStep);
       }
       return ticks;
     },
   };
 }
 
-function getDayInterval(isSubTick = false): TimeInterval {
+function getDayInterval(): TimeInterval {
   return {
     unit: "day",
-    labelFormat: isSubTick
-      ? { day: "numeric" }
-      : { month: "short", day: "numeric" },
-    getTicks: (minDate, maxDate, xScale) => {
-      const ticks = [];
-      const current = new Date(minDate);
-      current.setHours(0, 0, 0, 0); // Start of the day
-      while (current <= maxDate) {
-        ticks.push({
-          x: xScale(current),
-          label: current.toLocaleDateString(
-            undefined,
-            isSubTick ? { day: "numeric" } : { month: "short", day: "numeric" },
-          ),
-        });
-        current.setDate(current.getDate() + 1);
+    getTicks: (minDate, maxDate, xScale, availableWidth) => {
+      const ticks: Tick[] = [];
+      const current: Date = new Date(minDate);
+      current.setHours(0, 0, 0, 0);
+
+      const totalDays: number =
+        (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+      const pixelsPerDay: number = availableWidth / Math.max(1, totalDays);
+
+      let dayStep: number = 1;
+      if (pixelsPerDay < MIN_PIXELS_FOR_DAY_NUMBER) {
+        // Use smaller threshold for just day numbers
+        dayStep = Math.ceil(MIN_PIXELS_FOR_DAY_NUMBER / pixelsPerDay);
+        if (dayStep > 10) dayStep = 10; // Cap step
       }
-      return ticks;
-    },
-  };
-}
 
-function getHourInterval(): TimeInterval {
-  return {
-    unit: "hour",
-    labelFormat: { hour: "numeric", hour12: true },
-    getTicks: (minDate, maxDate, xScale) => {
-      const ticks = [];
-      const current = new Date(minDate);
-      current.setMinutes(0, 0, 0); // Start of the hour
-      const intervalHours = 6; // Show ticks every 6 hours
+      // Show month only if dayStep is large, otherwise it's too noisy
+      const labelFormat: Intl.DateTimeFormatOptions =
+        dayStep > 3 || pixelsPerDay > 60
+          ? { month: "short", day: "numeric" }
+          : { day: "numeric" };
 
       while (current <= maxDate) {
         ticks.push({
           x: xScale(current),
-          label: current.toLocaleDateString(undefined, {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          }),
+          label: current.toLocaleDateString(undefined, labelFormat),
+          isMajor: false,
         });
-        current.setHours(current.getHours() + intervalHours);
+        current.setDate(current.getDate() + dayStep);
       }
       return ticks;
     },

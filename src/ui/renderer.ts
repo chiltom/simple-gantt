@@ -1,10 +1,8 @@
 import type { Item } from "../core/item.js";
 import type { GanttConfig } from "../core/config.js";
 import type { DateRange, TimeInterval } from "../utils/dateUtils.js";
-import {
-  createXScale,
-  getAppropriateTimeIntervals,
-} from "../utils/dateUtils.js";
+import type { Tick } from "../utils/dateUtils.js";
+import { getAdaptiveTimeIntervals } from "../utils/dateUtils.js";
 import { getPriorityColor, lightenDarkenColor } from "../utils/colorUtils.js";
 
 interface RenderContext {
@@ -45,12 +43,16 @@ export function renderSVGContent(context: RenderContext): void {
   }
 
   // 1. Draw Grid Lines and Date Labels (Timeline Headers)
+  const visibleTimelineWidth: number =
+    visibleDateRange.maxDate.getTime() === visibleDateRange.minDate.getTime()
+      ? containerWidth // Avoid division by zero if range is zero
+      : xScale(visibleDateRange.maxDate) - xScale(visibleDateRange.minDate);
   drawTimelineHeaders(
     svgContentGroup,
     visibleDateRange.minDate,
     visibleDateRange.maxDate,
     xScale,
-    containerWidth,
+    visibleTimelineWidth,
     margins,
     rowHeight * items.length + margins.top + margins.bottom,
   );
@@ -91,7 +93,7 @@ function drawTimelineHeaders(
   minVisibleDate: Date,
   maxVisibleDate: Date,
   xScale: (date: Date) => number,
-  svgWidth: number,
+  timelineDrawingWidth: number,
   margins: RenderContext["margins"],
   totalChartHeight: number,
 ): void {
@@ -102,107 +104,114 @@ function drawTimelineHeaders(
   headerGroup.setAttribute("class", "gantt-timeline-header");
 
   const {
-    primaryInterval,
-    secondaryInterval,
-  }: { primaryInterval: TimeInterval; secondaryInterval?: TimeInterval } =
-    getAppropriateTimeIntervals(minVisibleDate, maxVisibleDate);
-
-  // Primary Ticks (e.g., Months)
-  const primaryTicks: { x: number; label: string }[] = primaryInterval.getTicks(
+    primary,
+    secondary,
+  }: {
+    primary?: TimeInterval | undefined;
+    secondary?: TimeInterval | undefined;
+  } = getAdaptiveTimeIntervals(
     minVisibleDate,
     maxVisibleDate,
-    xScale,
+    timelineDrawingWidth,
   );
-  primaryTicks.forEach((tick) => {
-    // Vertical grid line for primary tick
-    const line: SVGLineElement = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "line",
-    );
-    line.setAttribute("x1", tick.x.toString());
-    line.setAttribute("x2", tick.x.toString());
-    line.setAttribute("y1", (margins.top - 20).toString()); // Extend slightly above main labels
-    line.setAttribute("y2", totalChartHeight.toString());
-    line.setAttribute("class", `grid-line grid-line-${primaryInterval.unit}`);
-    headerGroup.appendChild(line);
 
-    // Label for primary tick
-    const text: SVGTextElement = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "text",
-    );
-    text.setAttribute("x", (tick.x + 5).toString()); // Position text slightly after the line
-    text.setAttribute("y", (margins.top - 25).toString());
-    text.setAttribute("class", `date-label date-label-${primaryInterval.unit}`);
-    text.textContent = tick.label;
-    headerGroup.appendChild(text);
-  });
+  let lastPrimaryLabelEndX: number = -Infinity;
+  let lastSecondaryLabelEndX: number = -Infinity;
+  const labelPadding: number = 5; // Pixels between labels
 
-  // Secondary Ticks (e.g., Days or Weeks under Months)
-  if (secondaryInterval && secondaryInterval.getSubTicks) {
-    const subTicks: { x: number; label: string }[] =
-      secondaryInterval.getSubTicks(minVisibleDate, maxVisibleDate, xScale);
-    subTicks.forEach((tick) => {
+  // Primary Ticks (e.g., Months)
+  if (primary) {
+    const primaryTicks: Tick[] = primary.getTicks(
+      minVisibleDate,
+      maxVisibleDate,
+      xScale,
+      timelineDrawingWidth,
+    );
+    primaryTicks.forEach((tick) => {
+      // Vertical grid line for primary tick
       const line: SVGLineElement = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "line",
       );
       line.setAttribute("x1", tick.x.toString());
       line.setAttribute("x2", tick.x.toString());
-      line.setAttribute("y1", margins.top.toString());
+      line.setAttribute("y1", (margins.top - 20).toString()); // Extend slightly above main labels
       line.setAttribute("y2", totalChartHeight.toString());
-      line.setAttribute(
-        "class",
-        `grid-line grid-line-secondary grid-line-${secondaryInterval.unit}`,
-      );
+      line.setAttribute("class", `grid-line grid-line-${primary.unit}`);
       headerGroup.appendChild(line);
 
-      const text: SVGTextElement = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "text",
-      );
-      text.setAttribute("x", (tick.x + 3).toString());
-      text.setAttribute("y", (margins.top - 5).toString()); // Position below primary labels
-      text.setAttribute(
-        "class",
-        `date-label date-label-secondary date-label-${secondaryInterval.unit}`,
-      );
-      text.textContent = tick.label;
-      headerGroup.appendChild(text);
-    });
-  } else if (secondaryInterval) {
-    // Fallback if getSubTicks is not defined, use getTicks
-    const secondaryTicks: { x: number; label: string }[] =
-      secondaryInterval.getTicks(minVisibleDate, maxVisibleDate, xScale);
-    secondaryTicks.forEach((tick) => {
-      const line: SVGLineElement = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "line",
-      );
-      line.setAttribute("x1", tick.x.toString());
-      line.setAttribute("x2", tick.x.toString());
-      line.setAttribute("y1", margins.top.toString());
-      line.setAttribute("y2", totalChartHeight.toString());
-      line.setAttribute(
-        "class",
-        `grid-line grid-line-secondary grid-line-${secondaryInterval.unit}`,
-      );
-      headerGroup.appendChild(line);
-
-      // Avoid label overlap if primary interval is already very granular (e.g. days)
-      if (primaryInterval.unit !== secondaryInterval.unit) {
+      // Estimate label width (very rough, proper way is to render, measure, then decide)
+      const estimatedLabelWidth: number = tick.label.length * 7; // Approx 7px per char for primary
+      if (
+        tick.x - estimatedLabelWidth / 2 >
+          lastPrimaryLabelEndX + labelPadding ||
+        primaryTicks.length === 1
+      ) {
         const text: SVGTextElement = document.createElementNS(
           "http://www.w3.org/2000/svg",
           "text",
         );
-        text.setAttribute("x", (tick.x + 3).toString());
-        text.setAttribute("y", (margins.top - 5).toString());
+        text.setAttribute("x", tick.x.toString()); // Centered on the tick
+        text.setAttribute("y", (margins.top - 25).toString()); // Position for primary labels
         text.setAttribute(
           "class",
-          `date-label date-label-secondary date-label-${secondaryInterval.unit}`,
+          `date-label date-label-primary date-label-${primary.unit}`,
         );
+        text.setAttribute("text-anchor", "middle");
         text.textContent = tick.label;
         headerGroup.appendChild(text);
+        // After appending could getBBox(), but that's slow in a loop.
+        // For now, using estimation for `lastPrimaryLabelEndX`.
+        lastPrimaryLabelEndX = tick.x + estimatedLabelWidth / 2;
+      }
+    });
+  }
+
+  // Secondary Ticks (e.g., Days or Weeks under Months)
+  if (secondary) {
+    const secondaryTicks: Tick[] = secondary.getTicks(
+      minVisibleDate,
+      maxVisibleDate,
+      xScale,
+      timelineDrawingWidth,
+    );
+    secondaryTicks.forEach((tick) => {
+      // Draw vertical grid line for secondary tick (often thinner or dashed)
+      const line: SVGLineElement = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "line",
+      );
+      line.setAttribute("x1", tick.x.toString());
+      line.setAttribute("x2", tick.x.toString());
+      line.setAttribute("y1", margins.top.toString()); // Secondary labels are lower
+      line.setAttribute("y2", totalChartHeight.toString());
+      line.setAttribute(
+        "class",
+        `grid-line grid-line-secondary grid-line-${secondary.unit}`,
+      );
+      headerGroup.appendChild(line);
+
+      // Estimate label width
+      const estimatedLabelWidth: number = tick.label.length * 6; // Approx 6px per char for secondary
+      if (
+        tick.x - estimatedLabelWidth / 2 >
+          lastSecondaryLabelEndX + labelPadding ||
+        secondaryTicks.length === 1
+      ) {
+        const text: SVGTextElement = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text",
+        );
+        text.setAttribute("x", tick.x.toString()); // Centered
+        text.setAttribute("y", (margins.top - 5).toString()); // Position below primary labels
+        text.setAttribute(
+          "class",
+          `date-label date-label-secondary date-label-${secondary.unit}`,
+        );
+        text.setAttribute("text-anchor", "middle");
+        text.textContent = tick.label;
+        headerGroup.appendChild(text);
+        lastSecondaryLabelEndX = tick.x + estimatedLabelWidth / 2;
       }
     });
   }
@@ -236,7 +245,7 @@ function drawItemBar(
   const barEndX: number = xScale(endDate);
   let width: number = barEndX - x;
 
-  if (width < 0) width = 0; // Should not happen with valid dates
+  if (width < 1) width = 1; // Ensure bar is at least 1px for visibility, even if dates are same
 
   // Main item bar background (full width of the bar)
   const barRect: SVGRectElement = document.createElementNS(
@@ -287,9 +296,11 @@ function drawItemBar(
   }
 
   // Text on the bar (Item name)
-  const textPadding: number = 5;
-  const availableTextWidth: number = width - 2 * textPadding;
-  if (availableTextWidth > 10) {
+  const textPadding: number = 4;
+  const minWidthForAnyText: number = 5; // Minimum bar width to even consider showing text
+  const minWidthForEllipsis: number = 15; // Minimum bar width for ellipsis "..."
+  const charWidthApproximation: number = 7;
+  if (width >= minWidthForAnyText) {
     // Only show text if there's some space
     const text: SVGTextElement = document.createElementNS(
       "http://www.w3.org/2000/svg",
@@ -300,25 +311,32 @@ function drawItemBar(
     text.setAttribute("dy", "0.35em"); // Vertical alignment
     text.setAttribute("class", "gantt-item-name");
     text.textContent = item.name;
-    // Truncate text if too long (simple truncation)
-    // A more sophisticated approach would mesaure text width
-    const charWidthApproximation: number = 8; // Very rough guess
-    if (item.name.length * charWidthApproximation > availableTextWidth) {
-      const maxChars: number = Math.floor(
-        availableTextWidth / charWidthApproximation,
-      );
-      if (maxChars > 3) {
-        text.textContent = item.name.substring(0, maxChars - 3) + "...";
+
+    const availableTextPixelWidth: number = width - 2 * textPadding;
+    let displayText: string = item.name;
+
+    if (item.name.length * charWidthApproximation > availableTextPixelWidth) {
+      if (availableTextPixelWidth >= minWidthForEllipsis) {
+        // Enough space for "X..."
+        const maxChars: number = Math.floor(
+          (availableTextPixelWidth - charWidthApproximation * 2) /
+            charWidthApproximation,
+        ); // Reserve space for "...";
+        displayText = item.name.substring(0, Math.max(1, maxChars)) + "...";
       } else {
-        text.textContent = ""; // Too small to show even ellipsis
+        displayText = ""; // Not enough space even for a decent ellipsis
       }
     }
-    itemGroup.appendChild(text);
+
+    if (displayText) {
+      text.textContent = displayText;
+      itemGroup.appendChild(text);
+    }
   }
 
   // Date range on bar if space permits
-  const dateRangeTextWidthApproximation: number = 100; // Approx width for "MMM DD - MMM DD"
-  if (width > dateRangeTextWidthApproximation + item.name.length * 8 + 20) {
+  const dateRangeTextWidthApproximation: number = 120; // Approx width for "MMM DD - MMM DD"
+  if (width > dateRangeTextWidthApproximation) {
     // Ensure it doesn't overlap name
     const dateText: SVGTextElement = document.createElementNS(
       "http://www.w3.org/2000/svg",

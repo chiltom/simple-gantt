@@ -7,7 +7,7 @@ export declare class GanttChart<T extends Item> {
     private overallDateRange;
     private currentZoomLevel;
     private currentViewBox;
-    private svgInitialWidth;
+    private worldWidth;
     private svgComputedHeight;
     private readonly margins;
     constructor(parentElementId: string, items: T[], userConfig?: Partial<GanttConfig<T>>);
@@ -19,7 +19,7 @@ export declare class GanttChart<T extends Item> {
     updateItems(newItems: T[]): void;
     updateConfig(newConfig: Partial<GanttConfig<T>>): void;
     zoom(delta: number): void;
-    zoomAtPoint(delta: number, mouseX: number, mouseY: number, isViewBoxPoint?: boolean): void;
+    zoomAtPoint(delta: number, screenMouseX: number, screenMouseY: number): void;
     private constrainViewBox;
     resetZoom(): void;
     pan(dxScreen: number, dyScreen: number): void;

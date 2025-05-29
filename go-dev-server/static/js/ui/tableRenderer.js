@@ -2,13 +2,15 @@ import { getPriorityColor } from "../utils/colorUtils.js";
 /**
  * Renders the table part of the Gantt chart (e.g., item names, priority badges).
  * For this version, it will only render priority badges without task names.
- * @param tableContainer The {@code HTMLDivElement} that will contain the table.
+ * @param tableContainer The element that will contain the table.
  * @param items The array of items to render.
  * @param config The Gantt chart configuration.
  * @param rowHeight The height of each row, to align with SVG.
+ * @param totalItemAreaHeight The height of the entire item area.
+ * @param topMargin The top margin to apply, matching SVG.
  */
 export function renderTable(tableContainer, items, // Items should be pre-sorted if a specific order is always needed
-config, rowHeight) {
+config, rowHeight, totalItemAreaHeight, topMargin) {
     tableContainer.innerHTML = ""; // Clear previous content
     if (!config.showPriorityColumn) {
         tableContainer.style.display = "none";
@@ -20,8 +22,9 @@ config, rowHeight) {
     // Create a container for all table rows
     const tableRowsContainer = document.createElement("div");
     tableRowsContainer.className = "gantt-table-rows-container";
-    // This container's height should match the SVG content height for synchronized scrolling.
-    // The GanttChart class will manage overall height synchronization.
+    tableRowsContainer.style.paddingTop = `${topMargin}px`;
+    tableRowsContainer.style.height = `${topMargin + totalItemAreaHeight}px`;
+    // The tableContainer itself has {@code overflowY: hidden}, scroll is driven by svgContainer.
     sortedItems.forEach((item) => {
         const rowElement = document.createElement("div");
         rowElement.className = "gantt-table-row-item";

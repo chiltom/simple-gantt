@@ -20,13 +20,13 @@ export interface DOMStructure {
  */
 export function createDOMStructure<T extends Item>(
   parentElementId: string,
-  config: GanttConfig<T>,
+  config: GanttConfig<T>
 ): DOMStructure {
   const parentElement: HTMLElement | null =
     document.getElementById(parentElementId);
   if (!parentElement) {
     throw new Error(
-      `[DOM Setup] Parent element with ID '${parentElementId}' not found.`,
+      `[DOM Setup] Parent element with ID '${parentElementId}' not found.`
     );
   }
   parentElement.innerHTML = ""; // Clear any existing content
@@ -67,7 +67,8 @@ export function createDOMStructure<T extends Item>(
   const tableContainer: HTMLDivElement = document.createElement("div");
   tableContainer.className = "gantt-table-container";
   tableContainer.style.flex = "0 0 60px"; // 60px width, no grow, no shrink
-  tableContainer.style.overflowY = "hidden"; // Scroll synchronized with SVG
+  tableContainer.style.overflowY = "auto";
+  tableContainer.style.position = "relative"; // For potential sticky header within table
   mainContentWrapper.appendChild(tableContainer);
 
   // SVG container
@@ -83,7 +84,7 @@ export function createDOMStructure<T extends Item>(
   // SVG element
   const svgElement: SVGSVGElement = document.createElementNS(
     "http://www.w3.org/2000/svg",
-    "svg",
+    "svg"
   );
   svgElement.setAttribute("width", "100%"); // Responsive width
   // Height will be set dynamically based on content by GanttChart class
@@ -93,7 +94,7 @@ export function createDOMStructure<T extends Item>(
   // SVG content group (for transforming content for pan/zoom via viewBox)
   const svgContentGroup: SVGGElement = document.createElementNS(
     "http://www.w3.org/2000/svg",
-    "g",
+    "g"
   );
   svgContentGroup.setAttribute("class", "gantt-content-group");
   svgElement.appendChild(svgContentGroup);

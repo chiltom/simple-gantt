@@ -2,7 +2,7 @@ import type { GanttChart } from "../core/ganttChart.js"; // Use forward declarat
 
 let isDragging: boolean = false;
 let lastX: number = 0;
-// let lastY: number = 0; // Vertical panning might be restricted or handled differently
+let lastY: number = 0;
 
 /**
  * Sets up pan event listeners on the SVG container.
@@ -17,7 +17,7 @@ export function setupPanEvents(
     if (e.button !== 0) return; // Only pan with left mouse button
     isDragging = true;
     lastX = e.clientX;
-    // lastY = e.clientY;
+    lastY = e.clientY;
     svgContainer.style.cursor = "grabbing";
     e.preventDefault();
   };
@@ -26,12 +26,12 @@ export function setupPanEvents(
     if (!isDragging) return;
 
     const dx: number = e.clientX - lastX;
-    // const dy: number = e.clientY - lastY; // If vertical panning is needed
+    const dy: number = e.clientY - lastY;
 
-    ganttChartInstance.pan(dx, 0); // Pan horizontally, dy is 0 for now
+    ganttChartInstance.pan(dx, dy);
 
     lastX = e.clientX;
-    // lastY = e.clientY;
+    lastY = e.clientY;
     e.preventDefault();
   };
 

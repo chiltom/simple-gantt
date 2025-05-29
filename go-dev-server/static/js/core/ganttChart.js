@@ -11,20 +11,22 @@ import { setupInteractionEvents } from "../eventHandlers/interactionHandler.js";
 export class GanttChart {
     constructor(parentElementId, items, userConfig) {
         this.currentZoomLevel = 1;
-        this.svgInitialWidth = 1000; // Base width, will be adjusted
+        this.worldWidth = 2000; // Default conceptual width for the entire date range at 100% zoom.
         this.svgComputedHeight = 400; // Adjusted dynamically
         this.margins = { top: 50, right: 20, bottom: 30, left: 0 }; // SVG internal margins, left is 0 because table is separate
         this.config = { ...getDefaultConfig(), ...userConfig };
         this.items = this.preprocessItems(items);
         this.dom = createDOMStructure(parentElementId, this.config);
-        // Calculate initial SVG width based on container (it's 100% width)
-        this.svgInitialWidth =
-            this.dom.svgContainer.clientWidth || this.svgInitialWidth;
         this.overallDateRange = calculateDateRange(this.items, this.config.timelineMonths);
+        // Calculate initial SVG width based on container (its 100% width)
+        const daysInOverallRange = (this.overallDateRange.maxDate.getTime() -
+            this.overallDateRange.minDate.getTime()) /
+            (1000 * 60 * 60 * 24);
+        this.worldWidth = Math.max(this.dom.svgContainer.clientWidth, daysInOverallRange * 30); // e.g. 30px per day as a base
         this.currentViewBox = {
             x: 0,
             y: 0,
-            width: this.svgInitialWidth, // Initial viewbox width matches SVG width at zoom 1
+            width: this.dom.svgContainer.clientWidth || this.worldWidth / 2, // Initial viewbox width matches SVG width at zoom 1
             height: this.svgComputedHeight, // Will be updated in render
         };
         this.dom.svgElement.appendChild(createSvgGradientDefs(this.config.colors));
@@ -65,30 +67,27 @@ export class GanttChart {
     }
     render() {
         // 1. Update dimensions and scales
-        this.svgInitialWidth =
-            this.dom.svgContainer.clientWidth || this.svgInitialWidth;
+        const itemAreaHeight = this.items.length * (this.config.rowHeight || 40);
         this.svgComputedHeight =
-            this.margins.top +
-                this.items.length * (this.config.rowHeight || 40) +
-                this.margins.bottom;
+            this.margins.top + itemAreaHeight + this.margins.bottom;
         this.dom.svgElement.setAttribute("height", this.svgComputedHeight.toString());
-        this.dom.tableContainer.style.maxHeight = `${this.svgComputedHeight}px`; // Sync height
-        this.dom.svgContainer.style.maxHeight = `${this.svgComputedHeight}px`;
+        this.dom.tableContainer.style.height = `${this.svgComputedHeight}px`; // Sync height
+        this.dom.svgContainer.style.height = `${this.svgComputedHeight}px`;
         // Adjust viewBox height if it hasn't been zoomed vertically
-        if (this.currentViewBox.height === 400 || this.currentViewBox.y === 0) {
+        if (this.currentViewBox.height < this.svgComputedHeight &&
+            this.currentZoomLevel === 1) {
             // Heuristic for initial or unzoomed state
-            this.currentViewBox.height = this.svgComputedHeight;
+            this.currentViewBox.height = Math.min(this.svgComputedHeight, this.dom.svgContainer.clientHeight || this.svgComputedHeight);
         }
+        this.constrainViewBox(); // Apply constraints before updating SVG attribute
         this.updateSvgViewBox();
-        // Calculate available width for the timeline content inside SVG (respecting margins)
-        const timelineContentWidth = this.currentViewBox.width - this.margins.left - this.margins.right;
-        // Create xScale based on the current viewBox's representation of the overall date range
         // The xScale maps a date to a pixel value *within the current viewBox's coordinate system*.
-        const xScale = createXScale(this.getVisibleDateRange(), // Use visible date range for scaling within the view
-        timelineContentWidth, this.margins.left);
+        const xScale = createXScale(this.overallDateRange, this.worldWidth, 0 // Margins are handled inside drawing functions relative to their group
+        );
         // 2. Render Table (Priority Badges)
         if (this.config.showPriorityColumn) {
-            renderTable(this.dom.tableContainer, this.items, this.config, this.config.rowHeight || 40);
+            renderTable(this.dom.tableContainer, this.items, this.config, this.config.rowHeight || 40, itemAreaHeight, // Pass the height of just the items area
+            this.margins.top);
         }
         // 3. Render SVG Content (Grid, Bars, Labels)
         renderSVGContent({
@@ -99,8 +98,8 @@ export class GanttChart {
             rowHeight: this.config.rowHeight || 40,
             barHeight: this.config.barHeight || 28,
             barPadding: this.config.padding || 6,
-            containerWidth: this.currentViewBox.width, // Pass viewBox width as the drawing canvas width
-            containerHeight: this.svgComputedHeight, // Total height of content
+            containerWidth: this.worldWidth,
+            containerHeight: this.svgComputedHeight,
             visibleDateRange: this.getVisibleDateRange(),
             margins: this.margins,
         });
@@ -113,7 +112,7 @@ export class GanttChart {
         // Calculate what part of overallDateRange is visible in currentViewBox
         const totalDuration = this.overallDateRange.maxDate.getTime() -
             this.overallDateRange.minDate.getTime();
-        if (totalDuration <= 0)
+        if (totalDuration <= 0 || this.worldWidth <= 0)
             return this.overallDateRange;
         // How much of the total scrollable width is represented by the viewBox's x and width
         // This assumes the initial viewBox width (at zoom 1) covers the entire overallDateRange.
@@ -122,12 +121,13 @@ export class GanttChart {
         // The actual scrollableWidth might be larger if we allow zooming out beyond initial range.
         // For simplicity now, assume currentViewBox.width at zoomLevel 1 covers overallDateRange.
         const viewPortStartTime = this.overallDateRange.minDate.getTime() +
-            (this.currentViewBox.x / this.svgInitialWidth) * totalDuration;
-        const viewPortEndTime = viewPortStartTime +
-            (this.currentViewBox.width / this.svgInitialWidth) * totalDuration;
+            (this.currentViewBox.x / this.worldWidth) * totalDuration;
+        const viewPortEndTime = this.overallDateRange.minDate.getTime() +
+            ((this.currentViewBox.x + this.currentViewBox.width) / this.worldWidth) *
+                totalDuration;
         return {
-            minDate: new Date(viewPortStartTime),
-            maxDate: new Date(viewPortEndTime),
+            minDate: new Date(Math.max(this.overallDateRange.minDate.getTime(), viewPortStartTime)),
+            maxDate: new Date(Math.min(this.overallDateRange.maxDate.getTime(), viewPortEndTime)),
         };
     }
     // --- Public API Methods ---
@@ -144,73 +144,85 @@ export class GanttChart {
     }
     // --- Zoom and Pan Methods ---
     zoom(delta) {
-        // Simple center zoom
-        const centerX = this.currentViewBox.x + this.currentViewBox.width / 2;
-        const centerY = this.currentViewBox.y + this.currentViewBox.height / 2;
-        this.zoomAtPoint(delta, centerX, centerY, true); // isViewBoxPoint = true
-    }
-    zoomAtPoint(delta, mouseX, mouseY, isViewBoxPoint = false) {
-        const newZoomLevel = Math.max(0.2, Math.min(5, this.currentZoomLevel + delta * this.currentZoomLevel)); // Multiplicative zoom
-        if (newZoomLevel === this.currentZoomLevel)
+        const svgRect = this.getSvgRect();
+        if (!svgRect)
             return;
-        const zoomFactor = newZoomLevel / this.currentZoomLevel;
-        // Convert mouseX, mouseY to viewBox coordinates if they are screen coordinates
-        let pointXInViewBox = mouseX;
-        let pointYInViewBox = mouseY;
-        if (!isViewBoxPoint) {
-            // mouseX, mouseY are screen coordinates relative to SVG top-left
-            pointXInViewBox =
-                this.currentViewBox.x +
-                    mouseX * (this.currentViewBox.width / this.dom.svgElement.clientWidth);
-            pointYInViewBox =
-                this.currentViewBox.y +
-                    mouseY *
-                        (this.currentViewBox.height / this.dom.svgElement.clientHeight);
-        }
-        const newWidth = this.currentViewBox.width / zoomFactor;
-        const newHeight = this.currentViewBox.height / zoomFactor;
+        // Simple center zoom
+        const centerX = svgRect.width / 2;
+        const centerY = svgRect.height / 2;
+        this.zoomAtPoint(delta, centerX, centerY); // isViewBoxPoint = true
+    }
+    zoomAtPoint(delta, screenMouseX, screenMouseY) {
+        const targetViewBoxWidth = this.currentViewBox.width / (1 + delta);
+        // Clamp targetViewBoxWidth: min = small portion of screen, max = worldWidth * some factor (e.g., 2 for 50% zoom out)
+        const minViewBoxWidth = (this.dom.svgContainer.clientWidth || 300) * 0.1; // Zoom in to see 10% of screen width
+        const maxViewBoxWidth = this.worldWidth * 2; // Zoom out to see twice the worldWidth
+        const newViewBoxWidth = Math.max(minViewBoxWidth, Math.min(targetViewBoxWidth, maxViewBoxWidth));
+        if (newViewBoxWidth === this.currentViewBox.width)
+            return; // No change
+        const actualZoomRatio = this.currentViewBox.width / newViewBoxWidth; // How much current view is scaled
+        // Convert screen mouse coordinates to viewBox coordinates
+        const currentSvgClientWidth = this.dom.svgElement.clientWidth || this.currentViewBox.width;
+        const currentSvgClientHeight = this.dom.svgElement.clientHeight || this.currentViewBox.height;
+        const pointXInViewBox = this.currentViewBox.x +
+            screenMouseX * (this.currentViewBox.width / currentSvgClientWidth);
+        const pointYInViewBox = this.currentViewBox.y +
+            screenMouseY * (this.currentViewBox.height / currentSvgClientHeight);
         this.currentViewBox.x =
-            pointXInViewBox - (pointXInViewBox - this.currentViewBox.x) / zoomFactor;
+            pointXInViewBox -
+                (pointXInViewBox - this.currentViewBox.x) / actualZoomRatio;
         this.currentViewBox.y =
-            pointYInViewBox - (pointYInViewBox - this.currentViewBox.y) / zoomFactor;
-        this.currentViewBox.width = newWidth;
-        this.currentViewBox.height = newHeight;
-        this.currentZoomLevel = newZoomLevel;
-        // Constrain pan
+            pointYInViewBox -
+                (pointYInViewBox - this.currentViewBox.y) / actualZoomRatio;
+        this.currentViewBox.width = newViewBoxWidth;
+        this.currentViewBox.height = this.currentViewBox.height / actualZoomRatio; // Zoom height proportionally
+        this.currentZoomLevel = this.worldWidth / this.currentViewBox.width; // Update effective zoom level
         this.constrainViewBox();
-        this.updateSvgViewBox();
         updateZoomLevelDisplay(this.currentZoomLevel);
-        this.render(); // Re-render with new scale
+        this.render();
     }
     constrainViewBox() {
-        // Max x assuming the content width is effectively svgInitialWidth (at zoom 1)
-        // This needs to be more robust if content can be wider than initial view.
-        const maxViewBoxX = this.svgInitialWidth - this.currentViewBox.width;
-        const maxViewBoxY = this.svgComputedHeight - this.currentViewBox.height;
-        this.currentViewBox.x = Math.max(0, Math.min(this.currentViewBox.x, maxViewBoxX < 0 ? 0 : maxViewBoxX));
-        this.currentViewBox.y = Math.max(0, Math.min(this.currentViewBox.y, maxViewBoxY < 0 ? 0 : maxViewBoxY));
+        // Max x: worldWidth - currentViewBox.width. Min x: 0.
+        this.currentViewBox.x = Math.max(0, Math.min(this.currentViewBox.x, this.worldWidth - this.currentViewBox.width));
+        if (this.currentViewBox.width > this.worldWidth) {
+            // If zoomed out beyond world, center it
+            this.currentViewBox.x = (this.worldWidth - this.currentViewBox.width) / 2;
+        }
+        // Max y: svgComputedHeight - currentViewBox.height. Min y: 0.
+        this.currentViewBox.y = Math.max(0, Math.min(this.currentViewBox.y, this.svgComputedHeight - this.currentViewBox.height));
+        if (this.currentViewBox.height > this.svgComputedHeight) {
+            // If zoomed out vertically
+            this.currentViewBox.y =
+                (this.svgComputedHeight - this.currentViewBox.height) / 2;
+        }
+        // Ensure viewBox dimensions are not negative or zero if possible
+        if (this.currentViewBox.width <= 0)
+            this.currentViewBox.width = 1;
+        if (this.currentViewBox.height <= 0)
+            this.currentViewBox.height = 1;
     }
     resetZoom() {
-        this.currentZoomLevel = 1;
         this.currentViewBox = {
             x: 0,
             y: 0,
-            width: this.svgInitialWidth,
-            height: this.svgComputedHeight, // Reset to full computed height
+            width: this.dom.svgContainer.clientWidth || this.worldWidth / 2,
+            height: this.dom.svgContainer.clientHeight || this.svgComputedHeight,
         };
-        this.updateSvgViewBox();
+        this.currentZoomLevel = this.worldWidth / this.currentViewBox.width;
+        this.constrainViewBox(); // Ensure it's valid
+        // updateSvgViewBox(); // Called in render
         updateZoomLevelDisplay(this.currentZoomLevel);
         this.render();
     }
     pan(dxScreen, dyScreen) {
-        // Convert screen pixel delta to viewBox coordinate delta
-        const dxViewBox = dxScreen * (this.currentViewBox.width / this.dom.svgElement.clientWidth);
-        // const dyViewBox: number = dyScreen * (this.currentViewBox.height / this.dom.svgElement.clientHeight); // If vertical pan needed
+        const currentSvgClientWidth = this.dom.svgElement.clientWidth || this.currentViewBox.width;
+        const currentSvgClientHeight = this.dom.svgElement.clientHeight || this.currentViewBox.height;
+        const dxViewBox = dxScreen * (this.currentViewBox.width / currentSvgClientWidth);
+        const dyViewBox = dyScreen * (this.currentViewBox.height / currentSvgClientHeight); // Enable vertical pan
         this.currentViewBox.x -= dxViewBox;
-        // this.currentViewBox.y -= dyViewBox;
+        this.currentViewBox.y -= dyViewBox; // Apply vertical pan
         this.constrainViewBox();
-        this.updateSvgViewBox();
-        // No full re-render needed for pan, only if scales change, but for simplicity now:
+        // updateSvgViewBox(); // Called in render
         this.render();
     }
     // --- Utility methods ---

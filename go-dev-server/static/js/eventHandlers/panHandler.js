@@ -1,6 +1,6 @@
 let isDragging = false;
 let lastX = 0;
-// let lastY: number = 0; // Vertical panning might be restricted or handled differently
+let lastY = 0;
 /**
  * Sets up pan event listeners on the SVG container.
  * @param ganttChartInstance The instance of the GanttChart class.
@@ -12,7 +12,7 @@ export function setupPanEvents(ganttChartInstance, svgContainer) {
             return; // Only pan with left mouse button
         isDragging = true;
         lastX = e.clientX;
-        // lastY = e.clientY;
+        lastY = e.clientY;
         svgContainer.style.cursor = "grabbing";
         e.preventDefault();
     };
@@ -20,10 +20,10 @@ export function setupPanEvents(ganttChartInstance, svgContainer) {
         if (!isDragging)
             return;
         const dx = e.clientX - lastX;
-        // const dy: number = e.clientY - lastY; // If vertical panning is needed
-        ganttChartInstance.pan(dx, 0); // Pan horizontally, dy is 0 for now
+        const dy = e.clientY - lastY;
+        ganttChartInstance.pan(dx, dy);
         lastX = e.clientX;
-        // lastY = e.clientY;
+        lastY = e.clientY;
         e.preventDefault();
     };
     const onMouseUpOrLeave = () => {
